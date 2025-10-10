@@ -1,10 +1,10 @@
 import './App.css';
-import PoseDetector from './PoseDetector';
+import LiveDance from './LiveDance';
 
 function App() {
   return (
     <div className="App">
-      <PoseDetector />
+      <LiveDance />
     </div>
   );
 }
