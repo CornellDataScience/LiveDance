@@ -13,9 +13,7 @@ const PoseDetectorView = ({
   handLandmarks,
   showData,
   exportLandmarkData,
-  toggleDataPanel,
-  BODY_KEYPOINT_NAMES,
-  HAND_LANDMARK_NAMES
+  toggleDataPanel
 }) => {
   return (
     <div style={{ 
@@ -40,7 +38,7 @@ const PoseDetectorView = ({
           fontSize: '18px',
           margin: 0
         }}>
-          Full body and hand tracking with real-time feedback
+          Full body tracking with real-time feedback
         </p>
       </div>
 

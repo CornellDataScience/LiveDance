@@ -5,7 +5,7 @@
 
 class PoseEstimationService {
   constructor() {
-    this.baseURL = 'http://localhost:5001';
+    this.baseURL = 'http://localhost:8000';
   }
 
   /**

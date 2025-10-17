@@ -1,88 +1,45 @@
-# LiveDance 💃
+# LiveDance
 
 **Computer vision-powered dance training application with real-time pose feedback**
 
-## 🎯 Project Goal
+## Project Goal
 
 LiveDance uses computer vision to track a user's body pose from a live camera feed. The system identifies joint positioning and compares it to a reference dance video in order to provide the user with feedback for improvement.
 
-## 🏗 Architecture
+## Architecture
 
-This project uses a clean **MVC (Model-View-Controller)** architecture:
+This project uses a clean MVC architecture with clear separation:
 
-- **Frontend (React)**: View + Controller layers for UI and logic
-- **Backend (Python)**: Model layer with MediaPipe for pose estimation
-- **Communication**: Simple REST API (localhost only, no database)
+- **Frontend (React)**:
+  - Captures camera feed (browser requirement)
+  - Displays UI and visualizations
+  - Pure presentation logic
+- **Backend (Python)**:
+  - All ML/AI processing (MediaPipe pose estimation)
+  - Body and hand tracking
+  - Computation-heavy tasks
+- **Communication**: REST API over localhost
 
 ```
-React Frontend  ←→  Python Backend
+React Frontend  ─(video frames)→  Python Backend
+      ↑                                  │
+      └────────(pose landmarks)──────────┘
 ```
 
-## 📖 Quick Start
+## Quick Start
+
+**Requirements:** Python 3.11 (MediaPipe doesn't support Python 3.12 yet)
 
 ```bash
-# Terminal 1 - Start Python backend
+# Terminal 1 - Start Python backend (http://localhost:8000)
 cd backend
-python3 -m venv venv
+python3.11 -m venv venv  # Use Python 3.11 or 3.10
 source venv/bin/activate
 pip install -r requirements.txt
 python app.py
 
-# Terminal 2 - Start React frontend
+# Terminal 2 - Start React frontend (http://localhost:3000)
 cd frontend
 npm install
 npm start
 ```
-
-## 📂 Project Structure
-
-```
-LiveDance/
-├── frontend/              # React frontend (MVC structure)
-│   └── src/
-│       ├── LiveDance.js                       # Main component
-│       ├── controllers/PoseDetectorController.js
-│       ├── views/PoseDetectorView.js
-│       └── services/PoseEstimationService.js
-│
-├── backend/               # Python Flask server
-│   ├── app.py            # MediaPipe pose estimation
-│   └── requirements.txt
-│
-└── ARCHITECTURE.md       # Technical documentation
-```
-
-## ✨ Current Features
-
-- ✅ Real-time body pose tracking (17 keypoints)
-- ✅ Hand landmark detection (21 points per hand)
-- ✅ Live skeleton overlay visualization
-- ✅ Landmark data export (JSON)
-- ✅ Clean MVC architecture
-- ✅ Python-powered pose estimation
-
-## 🚧 Coming Soon
-
-- [ ] Reference video upload
-- [ ] Pose comparison algorithm
-- [ ] Real-time feedback system
-- [ ] Performance scoring
-
-## 🛠 Technology Stack
-
-**Frontend:**
-
-- React 19
-- HTML5 Canvas
-
-**Backend:**
-
-- Python 3.8+
-- Flask
-- MediaPipe
-- OpenCV
-- NumPy
-
-## 📝 License
-
-MIT License - See LICENSE file for details

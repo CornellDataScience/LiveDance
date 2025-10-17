@@ -1,6 +1,6 @@
 """
 LiveDance Backend - Python Pose Estimation Server
-Simple Flask server that processes video frames and returns pose landmarks
+Flask server that processes video frames and returns pose landmarks
 Uses MediaPipe for both body and hand tracking
 """
 
@@ -211,6 +211,6 @@ def estimate_pose():
 
 if __name__ == "__main__":
     print("🚀 LiveDance Python Backend Starting...")
-    print("📡 Server running at http://localhost:5001")
+    print("📡 Server running at http://localhost:8000")
     print("💃 Ready to track dance poses!")
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)

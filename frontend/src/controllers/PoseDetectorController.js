@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import * as poseDetection from '@tensorflow-models/pose-detection';
-import * as tf from '@tensorflow/tfjs-core';
-import '@tensorflow/tfjs-backend-webgl';
-import { Hands } from '@mediapipe/hands';
 import PoseEstimationService from '../services/PoseEstimationService';
 
 /**
  * Controller: Manages state and business logic for pose detection
- * Uses JavaScript ML libraries for fast live tracking
- * Python backend (PoseEstimationService) is available for video comparison features
+ * Camera feed is captured in frontend, all pose estimation happens in Python backend
  */
 export const usePoseDetectorController = () => {
   // Refs for DOM elements
@@ -22,30 +17,9 @@ export const usePoseDetectorController = () => {
   const [handLandmarks, setHandLandmarks] = useState({ left: [], right: [] });
   const [showData, setShowData] = useState(false);
 
-  // ML model instances (for live tracking)
-  const detectorRef = useRef(null);
-  const handsRef = useRef(null);
-  
-  // Service instance (for future video comparison)
+  // Service instance for backend communication
   const poseService = useRef(new PoseEstimationService());
   const animationRef = useRef(null);
-
-  // Body keypoint names for reference
-  const BODY_KEYPOINT_NAMES = [
-    'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
-    'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
-    'left_wrist', 'right_wrist', 'left_hip', 'right_hip',
-    'left_knee', 'right_knee', 'left_ankle', 'right_ankle'
-  ];
-
-  // Hand landmark names for reference
-  const HAND_LANDMARK_NAMES = [
-    'wrist', 'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip',
-    'index_mcp', 'index_pip', 'index_dip', 'index_tip',
-    'middle_mcp', 'middle_pip', 'middle_dip', 'middle_tip',
-    'ring_mcp', 'ring_pip', 'ring_dip', 'ring_tip',
-    'pinky_mcp', 'pinky_pip', 'pinky_dip', 'pinky_tip'
-  ];
 
   /**
    * Initialize camera
@@ -71,117 +45,24 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Load ML models for live tracking
+   * Check Python backend availability
    */
-  const loadModels = async () => {
+  const checkBackend = async () => {
     try {
-      setStatus('Loading motion tracking...');
+      setStatus('Connecting to pose estimation server...');
+      const isHealthy = await poseService.current.healthCheck();
       
-      // Initialize TensorFlow backend
-      await tf.setBackend('webgl');
-      await tf.ready();
-      
-      // Load MoveNet for body tracking
-      const detectorConfig = {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-      };
-      detectorRef.current = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        detectorConfig
-      );
-      
-      setStatus('Loading hand tracking...');
-      
-      // Load MediaPipe Hands
-      const handsModel = new Hands({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }
-      });
-      
-      handsModel.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-      
-      // Set up hand detection callback
-      handsModel.onResults((results) => {
-        if (!results.multiHandLandmarks || !canvasRef.current) return;
-        
-        const ctx = canvasRef.current.getContext('2d');
-        
-        // Extract hand landmark data
-        const extractedHandData = { left: [], right: [] };
-        
-        results.multiHandLandmarks.forEach((landmarks, handIndex) => {
-          const handedness = results.multiHandedness[handIndex]?.label || 'Unknown';
-          const handSide = handedness.toLowerCase();
-          
-          const handData = landmarks.map((landmark, index) => ({
-            name: HAND_LANDMARK_NAMES[index],
-            x: Math.round(landmark.x * 640 * 10) / 10,
-            y: Math.round(landmark.y * 480 * 10) / 10,
-            z: Math.round(landmark.z * 1000) / 1000,
-            normalized_x: Math.round(landmark.x * 1000) / 1000,
-            normalized_y: Math.round(landmark.y * 1000) / 1000
-          }));
-          
-          extractedHandData[handSide] = handData;
-        });
-        
-        setHandLandmarks(extractedHandData);
-        
-        // Draw hands
-        results.multiHandLandmarks.forEach((landmarks) => {
-          const handConnections = [
-            [0, 1], [1, 2], [2, 3], [3, 4],
-            [0, 5], [5, 6], [6, 7], [7, 8],
-            [0, 9], [9, 10], [10, 11], [11, 12],
-            [0, 13], [13, 14], [14, 15], [15, 16],
-            [0, 17], [17, 18], [18, 19], [19, 20],
-            [5, 9], [9, 13], [13, 17]
-          ];
-
-          ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-
-          handConnections.forEach(([i, j]) => {
-            const point1 = landmarks[i];
-            const point2 = landmarks[j];
-            
-            ctx.beginPath();
-            ctx.moveTo(point1.x * 640, point1.y * 480);
-            ctx.lineTo(point2.x * 640, point2.y * 480);
-            ctx.stroke();
-          });
-
-          landmarks.forEach((landmark) => {
-            const gradient = ctx.createRadialGradient(
-              landmark.x * 640, landmark.y * 480, 0,
-              landmark.x * 640, landmark.y * 480, 8
-            );
-            gradient.addColorStop(0, '#40E0D0');
-            gradient.addColorStop(1, '#1E90FF');
-            
-            ctx.beginPath();
-            ctx.arc(landmark.x * 640, landmark.y * 480, 5, 0, 2 * Math.PI);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-          });
-        });
-      });
-      
-      handsRef.current = handsModel;
-      
-      setStatus('Ready to dance!');
-      setIsReady(true);
-      return true;
+      if (isHealthy) {
+        setStatus('Ready to dance!');
+        setIsReady(true);
+        return true;
+      } else {
+        setStatus('⚠️ Backend server not running. Please start Python backend (port 8000)');
+        return false;
+      }
     } catch (error) {
-      setStatus('Something went wrong. Try refreshing the page.');
-      console.error('Model loading error:', error);
+      setStatus('⚠️ Unable to connect to backend. Please start Python server.');
+      console.error('Backend connection error:', error);
       return false;
     }
   };
@@ -292,7 +173,7 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Main detection loop (using JavaScript models for fast tracking)
+   * Main detection loop (sends frames to Python backend for pose estimation)
    */
   const detectPose = async () => {
     if (!videoRef.current || videoRef.current.readyState !== 4 || !canvasRef.current) {
@@ -301,35 +182,20 @@ export const usePoseDetectorController = () => {
     }
 
     try {
-      const ctx = canvasRef.current.getContext('2d');
-      ctx.clearRect(0, 0, 640, 480);
+      // Send frame to Python backend for pose estimation
+      const poseData = await poseService.current.estimatePose(videoRef.current);
       
-      // Detect body pose with MoveNet
-      const poses = await detectorRef.current.estimatePoses(videoRef.current);
-      
-      if (poses.length > 0) {
-        // Extract and store body landmark data
-        const extractedBodyData = poses[0].keypoints.map((kp, index) => ({
-          name: BODY_KEYPOINT_NAMES[index],
-          x: Math.round(kp.x * 10) / 10,
-          y: Math.round(kp.y * 10) / 10,
-          confidence: Math.round(kp.score * 100),
-          visible: kp.score > 0.3
-        }));
-        setBodyLandmarks(extractedBodyData);
-
-        // Create pose data structure for drawing
-        const poseData = {
-          body: extractedBodyData,
-          hands: handLandmarks
-        };
-        
-        // Draw skeleton
-        drawSkeleton(poseData);
+      // Update state with received data
+      if (poseData.body) {
+        setBodyLandmarks(poseData.body);
       }
-
-      // Detect hands with MediaPipe
-      await handsRef.current.send({ image: videoRef.current });
+      
+      if (poseData.hands) {
+        setHandLandmarks(poseData.hands);
+      }
+      
+      // Draw skeleton with received data
+      drawSkeleton(poseData);
       
     } catch (error) {
       console.error('Detection error:', error);
@@ -372,7 +238,7 @@ export const usePoseDetectorController = () => {
     const init = async () => {
       const cameraReady = await setupCamera();
       if (cameraReady) {
-        await loadModels();
+        await checkBackend();
       }
     };
     
@@ -383,7 +249,7 @@ export const usePoseDetectorController = () => {
    * Start detection loop when ready
    */
   useEffect(() => {
-    if (isReady && videoRef.current && detectorRef.current && handsRef.current) {
+    if (isReady && videoRef.current) {
       detectPose();
     }
 
@@ -404,9 +270,7 @@ export const usePoseDetectorController = () => {
     handLandmarks,
     showData,
     exportLandmarkData,
-    toggleDataPanel,
-    BODY_KEYPOINT_NAMES,
-    HAND_LANDMARK_NAMES
+    toggleDataPanel
   };
 };
 
