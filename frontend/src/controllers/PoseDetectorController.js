@@ -15,7 +15,17 @@ export const usePoseDetectorController = () => {
   const [isReady, setIsReady] = useState(false);
   const [bodyLandmarks, setBodyLandmarks] = useState([]);
   const [handLandmarks, setHandLandmarks] = useState({ left: [], right: [] });
+  const [pose3DAngles, setPose3DAngles] = useState({});
+  const [pose3DCoords, setPose3DCoords] = useState({});
   const [showData, setShowData] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    fps: 0,
+    totalLatency: 0,
+    backendTime: 0,
+    networkLatency: 0,
+    frontendTime: 0,
+    backendBreakdown: {}
+  });
 
   // Service instance for backend communication
   const poseService = useRef(new PoseEstimationService());
@@ -194,6 +204,36 @@ export const usePoseDetectorController = () => {
         setHandLandmarks(poseData.hands);
       }
       
+      // Add this new section for 3D angles
+      if (poseData.pose_3d_angles) {
+        setPose3DAngles(poseData.pose_3d_angles);
+      }
+      
+      // Add 3D coordinates
+      if (poseData.pose_3d_coords) {
+        setPose3DCoords(poseData.pose_3d_coords);
+      }
+      
+      // Update performance metrics
+      if (poseData.frontend_timings && poseData.timings) {
+        const totalTime = poseData.frontend_timings.total_frontend;
+        const networkLatency = poseData.frontend_timings.network_latency || 0;
+        
+        setPerformanceMetrics({
+          fps: (1000 / totalTime).toFixed(1),
+          totalLatency: totalTime.toFixed(0),
+          backendTime: poseData.timings.total_backend?.toFixed(0) || '0',
+          networkLatency: networkLatency.toFixed(0),
+          frontendTime: poseData.frontend_timings.image_capture.toFixed(0),
+          backendBreakdown: {
+            decode: poseData.timings.image_decode?.toFixed(1) || '0.0',
+            pose: poseData.timings.pose_detection?.toFixed(1) || '0.0',
+            angles3d: poseData.timings['3d_calculation']?.toFixed(1) || '0.0',
+            hands: poseData.timings.hand_detection?.toFixed(1) || '0.0'
+          }
+        });
+      }
+      
       // Draw skeleton with received data
       drawSkeleton(poseData);
       
@@ -212,7 +252,9 @@ export const usePoseDetectorController = () => {
     const data = {
       timestamp,
       body: bodyLandmarks,
-      hands: handLandmarks
+      hands: handLandmarks,
+      pose3DAngles,
+      pose3DCoords
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -268,6 +310,9 @@ export const usePoseDetectorController = () => {
     isReady,
     bodyLandmarks,
     handLandmarks,
+    pose3DAngles,
+    pose3DCoords,
+    performanceMetrics,
     showData,
     exportLandmarkData,
     toggleDataPanel

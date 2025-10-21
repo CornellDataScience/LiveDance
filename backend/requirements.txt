@@ -4,4 +4,5 @@ mediapipe>=0.10.0
 opencv-python>=4.9.0
 numpy>=1.26.0
 Pillow>=10.0.0
+torch>=2.0.0
 

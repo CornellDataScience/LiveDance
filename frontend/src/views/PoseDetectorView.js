@@ -11,6 +11,9 @@ const PoseDetectorView = ({
   isReady,
   bodyLandmarks,
   handLandmarks,
+  pose3DAngles,
+  pose3DCoords,
+  performanceMetrics,
   showData,
   exportLandmarkData,
   toggleDataPanel
@@ -41,6 +44,75 @@ const PoseDetectorView = ({
           Full body tracking with real-time feedback
         </p>
       </div>
+
+      {/* Performance Overlay */}
+      {isReady && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          padding: '16px',
+          background: 'rgba(0, 0, 0, 0.85)',
+          borderRadius: '12px',
+          color: 'white',
+          fontSize: '13px',
+          fontFamily: 'monospace',
+          minWidth: '280px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+          zIndex: 1000
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '15px', color: '#00ff00' }}>
+            ⚡ Performance Monitor
+          </div>
+          
+          <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span>FPS:</span>
+              <span style={{ color: '#0f0', fontWeight: 'bold' }}>{performanceMetrics.fps}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Total Latency:</span>
+              <span style={{ color: '#ff0', fontWeight: 'bold' }}>{performanceMetrics.totalLatency}ms</span>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Frontend:</div>
+          <div style={{ paddingLeft: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span>Image Capture:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.frontendTime}ms</span>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Network (HTTP):</div>
+          <div style={{ paddingLeft: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span>Latency:</span>
+              <span style={{ color: '#f0f' }}>{performanceMetrics.networkLatency}ms</span>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Backend ({performanceMetrics.backendTime}ms):</div>
+          <div style={{ paddingLeft: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
+              <span>• Decode:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.decode}ms</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
+              <span>• Pose:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.pose}ms</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
+              <span>• 3D Angles:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span>• Hands:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Bar */}
       <div style={{
@@ -274,6 +346,84 @@ const PoseDetectorView = ({
                 No hands detected. Hold hands in front of camera.
               </p>
             )}
+
+            {/* 3D Pose Angles */}
+            {Object.keys(pose3DAngles).length > 0 && (
+              <>
+                <h3 style={{ margin: '20px 0 15px 0', color: '#ffd700' }}>
+                  3D Joint Angles
+                </h3>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                  gap: '12px',
+                  fontSize: '13px',
+                  marginBottom: '20px'
+                }}>
+                  {Object.entries(pose3DAngles).map(([joint, angle]) => (
+                    <div key={joint} style={{
+                      padding: '12px',
+                      background: 'rgba(255, 215, 0, 0.2)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 215, 0, 0.3)'
+                    }}>
+                      <div style={{ 
+                        fontWeight: 'bold', 
+                        marginBottom: '6px',
+                        textTransform: 'capitalize',
+                        color: '#ffd700'
+                      }}>
+                        {joint.replace('_', ' ')}
+                      </div>
+                      <div style={{ 
+                        fontSize: '18px',
+                        fontWeight: '600',
+                        color: 'white'
+                      }}>
+                        {angle}°
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* 3D Joint Coordinates */}
+            {Object.keys(pose3DCoords).length > 0 && (
+              <>
+                <h3 style={{ margin: '20px 0 15px 0', color: '#ff6b9d' }}>
+                  3D Joint Coordinates
+                </h3>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: '10px',
+                  fontSize: '12px',
+                  marginBottom: '20px'
+                }}>
+                  {Object.entries(pose3DCoords).map(([joint, coords]) => (
+                    <div key={joint} style={{
+                      padding: '10px',
+                      background: 'rgba(255, 107, 157, 0.2)',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 107, 157, 0.3)'
+                    }}>
+                      <div style={{ 
+                        fontWeight: 'bold', 
+                        marginBottom: '4px',
+                        textTransform: 'capitalize',
+                        color: '#ff6b9d'
+                      }}>
+                        {joint.replace('_', ' ')}
+                      </div>
+                      <div style={{ color: 'white' }}>X: {coords.x}</div>
+                      <div style={{ color: 'white' }}>Y: {coords.y}</div>
+                      <div style={{ color: 'white' }}>Z: {coords.z}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -315,6 +465,17 @@ const PoseDetectorView = ({
                   marginRight: '8px'
                 }}></div>
                 <strong>Hands (Teal):</strong> {(handLandmarks.left?.length || 0) + (handLandmarks.right?.length || 0)} points tracked
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  display: 'inline-block',
+                  width: '12px',
+                  height: '12px',
+                  background: '#ffd700',
+                  borderRadius: '50%',
+                  marginRight: '8px'
+                }}></div>
+                <strong>3D Angles (Gold):</strong> {Object.keys(pose3DAngles).length} joints tracked
               </div>
             </div>
             
