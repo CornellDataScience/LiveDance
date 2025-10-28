@@ -129,13 +129,21 @@ MOVENET_NAMES = [
     "left_knee", "right_knee", "left_ankle", "right_ankle",
 ]
 
-HAND_LANDMARK_NAMES = [
-    "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
-    "index_mcp", "index_pip", "index_dip", "index_tip",
-    "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
-    "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
-    "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
+# Subset of hand landmarks – only finger tips and bases to reduce payload
+HAND_LANDMARK_SELECTION = [
+    ("wrist", 0),
+    ("thumb_cmc", 1),
+    ("thumb_tip", 4),
+    ("index_mcp", 5),
+    ("index_tip", 8),
+    ("middle_mcp", 9),
+    ("middle_tip", 12),
+    ("ring_mcp", 13),
+    ("ring_tip", 16),
+    ("pinky_mcp", 17),
+    ("pinky_tip", 20),
 ]
+HAND_LANDMARK_NAMES = [name for name, _ in HAND_LANDMARK_SELECTION]
 
 # =============================================================================
 # 3D Pose Estimation - MediaPipe World Landmarks
@@ -452,10 +460,16 @@ def inference_loop():
                     handedness = hand_results.multi_handedness[hand_idx].classification[0].label
                     hand_side = handedness.lower()
                     
+                    if hand_side not in hand_landmarks:
+                        continue
+                    
                     hand_data = []
-                    for lm_idx, lm in enumerate(hand_lms.landmark):
+                    for landmark_name, mp_index in HAND_LANDMARK_SELECTION:
+                        if mp_index >= len(hand_lms.landmark):
+                            continue
+                        lm = hand_lms.landmark[mp_index]
                         hand_data.append({
-                            "name": HAND_LANDMARK_NAMES[lm_idx],
+                            "name": landmark_name,
                             "x": round(lm.x * original_width, 1),  # Use ORIGINAL dimensions
                             "y": round(lm.y * original_height, 1),  # Use ORIGINAL dimensions
                             "z": round(lm.z, 3),

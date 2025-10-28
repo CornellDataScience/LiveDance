@@ -1,6 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
 import PoseEstimationService from '../services/PoseEstimationService';
 
+const TRACKED_HAND_LANDMARKS = [
+  'wrist',
+  'thumb_cmc',
+  'thumb_tip',
+  'index_mcp',
+  'index_tip',
+  'middle_mcp',
+  'middle_tip',
+  'ring_mcp',
+  'ring_tip',
+  'pinky_mcp',
+  'pinky_tip'
+];
+
+const HAND_CONNECTIONS_BY_NAME = [
+  ['wrist', 'thumb_cmc'],
+  ['thumb_cmc', 'thumb_tip'],
+  ['wrist', 'index_mcp'],
+  ['index_mcp', 'index_tip'],
+  ['wrist', 'middle_mcp'],
+  ['middle_mcp', 'middle_tip'],
+  ['wrist', 'ring_mcp'],
+  ['ring_mcp', 'ring_tip'],
+  ['wrist', 'pinky_mcp'],
+  ['pinky_mcp', 'pinky_tip'],
+  ['thumb_cmc', 'index_mcp'],
+  ['index_mcp', 'middle_mcp'],
+  ['middle_mcp', 'ring_mcp'],
+  ['ring_mcp', 'pinky_mcp']
+];
+
 /**
  * Controller: Manages state and business logic for pose detection
  * Camera feed is captured in frontend, all pose estimation happens in Python backend
@@ -184,39 +215,40 @@ export const usePoseDetectorController = () => {
     const drawHand = (landmarks) => {
       if (!landmarks || landmarks.length === 0) return;
 
-      const handConnections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
-        [0, 5], [5, 6], [6, 7], [7, 8],       // Index
-        [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
-        [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-        [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-        [5, 9], [9, 13], [13, 17]             // Palm
-      ];
+      const landmarkMap = {};
+      landmarks.forEach((landmark) => {
+        landmarkMap[landmark.name] = landmark;
+      });
 
       ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
 
-      handConnections.forEach(([i, j]) => {
-        const point1 = landmarks[i];
-        const point2 = landmarks[j];
-        
-        if (point1 && point2) {
+      HAND_CONNECTIONS_BY_NAME.forEach(([startName, endName]) => {
+        const startPoint = landmarkMap[startName];
+        const endPoint = landmarkMap[endName];
+
+        if (startPoint && endPoint) {
           ctx.beginPath();
-          ctx.moveTo(point1.x, point1.y);
-          ctx.lineTo(point2.x, point2.y);
+          ctx.moveTo(startPoint.x, startPoint.y);
+          ctx.lineTo(endPoint.x, endPoint.y);
           ctx.stroke();
         }
       });
 
-      landmarks.forEach((landmark) => {
+      TRACKED_HAND_LANDMARKS.forEach((name) => {
+        const landmark = landmarkMap[name];
+        if (!landmark) {
+          return;
+        }
+
         const gradient = ctx.createRadialGradient(
           landmark.x, landmark.y, 0,
           landmark.x, landmark.y, 8
         );
         gradient.addColorStop(0, '#40E0D0');
         gradient.addColorStop(1, '#1E90FF');
-        
+
         ctx.beginPath();
         ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
         ctx.fillStyle = gradient;
@@ -343,4 +375,3 @@ export const usePoseDetectorController = () => {
     toggle2D3D
   };
 };
-
