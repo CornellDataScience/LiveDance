@@ -1,4 +1,5 @@
 import React from 'react';
+import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
 
 /**
  * View: Pure UI component for pose detection display
@@ -13,7 +14,9 @@ const PoseDetectorView = ({
   handLandmarks,
   showData,
   exportLandmarkData,
-  toggleDataPanel
+  toggleDataPanel,
+  referenceVideo,
+  handleReferenceVideoSelect
 }) => {
   return (
     <div style={{ 
@@ -122,54 +125,128 @@ const PoseDetectorView = ({
         </div>
       )}
 
-      {/* Video Display */}
+      {/* Video Display - Side by Side Layout */}
       <div style={{
-        maxWidth: '680px',
+        maxWidth: '1400px',
         margin: '0 auto',
-        background: 'rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '20px',
-        padding: '20px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+        display: 'grid',
+        gridTemplateColumns: referenceVideo ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr',
+        gap: '20px',
+        alignItems: 'start'
       }}>
-        <div style={{ 
-          position: 'relative', 
-          borderRadius: '16px',
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
-        }}>
-          <video
-            ref={videoRef}
-            width="640"
-            height="480"
-            autoPlay
-            playsInline
-            style={{ 
-              transform: 'scaleX(-1)', 
-              display: 'block',
-              width: '100%',
-              height: 'auto'
-            }}
-          />
-          <canvas
-            ref={canvasRef}
-            width="640"
-            height="480"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              transform: 'scaleX(-1)',
-              width: '100%',
-              height: 'auto'
-            }}
-          />
-        </div>
-
-        {/* Data Display Panel */}
-        {isReady && showData && (
+        {/* Reference Video Player */}
+        {referenceVideo && (
           <div style={{
-            marginTop: '20px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            minHeight: '500px'
+          }}>
+            <ReferenceVideoPlayer onVideoSelect={handleReferenceVideoSelect} />
+          </div>
+        )}
+
+        {/* Camera Feed & Skeleton */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '20px',
+          padding: '20px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '12px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              color: 'white',
+              fontSize: '18px',
+              fontWeight: '600'
+            }}>
+              Your Camera
+            </h3>
+            {!referenceVideo && (
+              <button
+                onClick={() => handleReferenceVideoSelect({})}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  fontSize: '14px',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                }}
+              >
+                + Add Reference Video
+              </button>
+            )}
+          </div>
+
+          <div style={{
+            position: 'relative',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+          }}>
+            <video
+              ref={videoRef}
+              width="640"
+              height="480"
+              autoPlay
+              playsInline
+              style={{
+                transform: 'scaleX(-1)',
+                display: 'block',
+                width: '100%',
+                height: 'auto'
+              }}
+            />
+            <canvas
+              ref={canvasRef}
+              width="640"
+              height="480"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transform: 'scaleX(-1)',
+                width: '100%',
+                height: 'auto'
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Data Display Panel (below videos) */}
+      {isReady && (
+        <div style={{
+          maxWidth: '1400px',
+          margin: '20px auto 0'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          }}>
+        {showData && (
+          <div style={{
             padding: '20px',
             background: 'rgba(0, 0, 0, 0.6)',
             borderRadius: '12px',
@@ -278,9 +355,8 @@ const PoseDetectorView = ({
         )}
 
         {/* Info Panel */}
-        {isReady && !showData && (
+        {!showData && (
           <div style={{
-            marginTop: '20px',
             padding: '20px',
             background: 'rgba(255, 255, 255, 0.1)',
             borderRadius: '12px',
@@ -338,7 +414,9 @@ const PoseDetectorView = ({
             </ul>
           </div>
         )}
-      </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin {

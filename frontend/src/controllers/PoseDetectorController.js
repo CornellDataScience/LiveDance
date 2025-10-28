@@ -16,6 +16,7 @@ export const usePoseDetectorController = () => {
   const [bodyLandmarks, setBodyLandmarks] = useState([]);
   const [handLandmarks, setHandLandmarks] = useState({ left: [], right: [] });
   const [showData, setShowData] = useState(false);
+  const [referenceVideo, setReferenceVideo] = useState(null);
 
   // Service instance for backend communication
   const poseService = useRef(new PoseEstimationService());
@@ -232,6 +233,13 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Handle reference video selection
+   */
+  const handleReferenceVideoSelect = (video) => {
+    setReferenceVideo(video);
+  };
+
+  /**
    * Initialize on mount
    */
   useEffect(() => {
@@ -270,7 +278,9 @@ export const usePoseDetectorController = () => {
     handLandmarks,
     showData,
     exportLandmarkData,
-    toggleDataPanel
+    toggleDataPanel,
+    referenceVideo,
+    handleReferenceVideoSelect
   };
 };
 
