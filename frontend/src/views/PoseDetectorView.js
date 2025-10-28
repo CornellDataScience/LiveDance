@@ -16,7 +16,8 @@ const PoseDetectorView = ({
   performanceMetrics,
   showData,
   exportLandmarkData,
-  toggleDataPanel
+  toggleDataPanel,
+  toggle2D3D
 }) => {
   return (
     <div style={{ 
@@ -67,6 +68,13 @@ const PoseDetectorView = ({
           
           <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span>Mode:</span>
+              <span style={{ color: '#ff9f40', fontWeight: 'bold' }}>{performanceMetrics.mode || '3D'}</span>
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span>FPS:</span>
               <span style={{ color: '#0f0', fontWeight: 'bold' }}>{performanceMetrics.fps}</span>
             </div>
@@ -84,7 +92,7 @@ const PoseDetectorView = ({
             </div>
           </div>
           
-          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Network (HTTP):</div>
+          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Network (WebSocket):</div>
           <div style={{ paddingLeft: '10px', marginBottom: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
               <span>Latency:</span>
@@ -99,6 +107,10 @@ const PoseDetectorView = ({
               <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.decode}ms</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
+              <span>• Downscale:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.downscale}ms</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
               <span>• Pose:</span>
               <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.pose}ms</span>
             </div>
@@ -106,9 +118,13 @@ const PoseDetectorView = ({
               <span>• 3D Angles:</span>
               <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
               <span>• Hands:</span>
               <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+              <span>• Smoothing:</span>
+              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.smoothing}ms</span>
             </div>
           </div>
         </div>
@@ -190,6 +206,22 @@ const PoseDetectorView = ({
             }}
           >
             💾 Export Data
+          </button>
+          <button
+            onClick={toggle2D3D}
+            style={{
+              padding: '12px 24px',
+              background: 'rgba(255, 159, 64, 0.9)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '14px',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            🔄 Toggle 2D/3D
           </button>
         </div>
       )}

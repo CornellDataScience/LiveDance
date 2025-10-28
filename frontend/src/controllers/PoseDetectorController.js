@@ -55,21 +55,69 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Check Python backend availability
+   * Check Python backend availability and connect WebSocket
    */
   const checkBackend = async () => {
     try {
       setStatus('Connecting to pose estimation server...');
-      const isHealthy = await poseService.current.healthCheck();
       
-      if (isHealthy) {
-        setStatus('Ready to dance!');
-        setIsReady(true);
-        return true;
-      } else {
-        setStatus('⚠️ Backend server not running. Please start Python backend (port 8000)');
-        return false;
-      }
+      // Connect to WebSocket
+      await poseService.current.connect();
+      
+      // Set up pose result callback
+      poseService.current.onPoseResult = (poseData) => {
+        // Update state with received data
+        if (poseData.body) {
+          setBodyLandmarks(poseData.body);
+        }
+        
+        if (poseData.hands) {
+          setHandLandmarks(poseData.hands);
+        }
+        
+        if (poseData.pose_3d_angles) {
+          setPose3DAngles(poseData.pose_3d_angles);
+        }
+        
+        if (poseData.pose_3d_coords) {
+          setPose3DCoords(poseData.pose_3d_coords);
+        }
+        
+        // Update performance metrics
+        if (poseData.frontend_timings && poseData.timings) {
+          const totalTime = poseData.frontend_timings.total_frontend;
+          const networkLatency = poseData.frontend_timings.network_latency || 0;
+          const imageCaptureTime = poseData.frontend_timings.image_capture || 0;
+          
+          setPerformanceMetrics({
+            fps: poseData.fps || 0,
+            totalLatency: totalTime.toFixed(0),
+            backendTime: poseData.timings.total_backend?.toFixed(0) || '0',
+            networkLatency: networkLatency.toFixed(0),
+            frontendTime: imageCaptureTime.toFixed(0),
+            mode: poseData.mode || '3D',
+            backendBreakdown: {
+              decode: poseData.timings.image_decode?.toFixed(1) || '0.0',
+              downscale: poseData.timings.downscale?.toFixed(1) || '0.0',
+              pose: poseData.timings.pose_detection?.toFixed(1) || '0.0',
+              angles3d: poseData.timings['3d_calculation']?.toFixed(1) || '0.0',
+              hands: poseData.timings.hand_detection?.toFixed(1) || '0.0',
+              smoothing: poseData.timings.smoothing?.toFixed(1) || '0.0'
+            }
+          });
+        }
+        
+        // Draw skeleton with received data (using interpolated result)
+        const interpolatedData = poseService.current.getInterpolatedResult();
+        if (interpolatedData) {
+          drawSkeleton(interpolatedData);
+        }
+      };
+      
+      setStatus('Ready to dance!');
+      setIsReady(true);
+      return true;
+      
     } catch (error) {
       setStatus('⚠️ Unable to connect to backend. Please start Python server.');
       console.error('Backend connection error:', error);
@@ -183,7 +231,8 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Main detection loop (sends frames to Python backend for pose estimation)
+   * Main detection loop (sends frames to Python backend via WebSocket at 60 FPS)
+   * Rendering happens via callback at inference speed with interpolation
    */
   const detectPose = async () => {
     if (!videoRef.current || videoRef.current.readyState !== 4 || !canvasRef.current) {
@@ -192,55 +241,21 @@ export const usePoseDetectorController = () => {
     }
 
     try {
-      // Send frame to Python backend for pose estimation
-      const poseData = await poseService.current.estimatePose(videoRef.current);
+      // Send frame to Python backend via WebSocket
+      // Result will come back asynchronously via callback
+      await poseService.current.sendFrame(videoRef.current);
       
-      // Update state with received data
-      if (poseData.body) {
-        setBodyLandmarks(poseData.body);
+      // Draw interpolated result for smooth 60 FPS rendering
+      const interpolatedData = poseService.current.getInterpolatedResult();
+      if (interpolatedData) {
+        drawSkeleton(interpolatedData);
       }
-      
-      if (poseData.hands) {
-        setHandLandmarks(poseData.hands);
-      }
-      
-      // Add this new section for 3D angles
-      if (poseData.pose_3d_angles) {
-        setPose3DAngles(poseData.pose_3d_angles);
-      }
-      
-      // Add 3D coordinates
-      if (poseData.pose_3d_coords) {
-        setPose3DCoords(poseData.pose_3d_coords);
-      }
-      
-      // Update performance metrics
-      if (poseData.frontend_timings && poseData.timings) {
-        const totalTime = poseData.frontend_timings.total_frontend;
-        const networkLatency = poseData.frontend_timings.network_latency || 0;
-        
-        setPerformanceMetrics({
-          fps: (1000 / totalTime).toFixed(1),
-          totalLatency: totalTime.toFixed(0),
-          backendTime: poseData.timings.total_backend?.toFixed(0) || '0',
-          networkLatency: networkLatency.toFixed(0),
-          frontendTime: poseData.frontend_timings.image_capture.toFixed(0),
-          backendBreakdown: {
-            decode: poseData.timings.image_decode?.toFixed(1) || '0.0',
-            pose: poseData.timings.pose_detection?.toFixed(1) || '0.0',
-            angles3d: poseData.timings['3d_calculation']?.toFixed(1) || '0.0',
-            hands: poseData.timings.hand_detection?.toFixed(1) || '0.0'
-          }
-        });
-      }
-      
-      // Draw skeleton with received data
-      drawSkeleton(poseData);
       
     } catch (error) {
       console.error('Detection error:', error);
     }
 
+    // Continue loop at 60 FPS
     animationRef.current = requestAnimationFrame(detectPose);
   };
 
@@ -271,6 +286,15 @@ export const usePoseDetectorController = () => {
    */
   const toggleDataPanel = () => {
     setShowData(!showData);
+  };
+  
+  /**
+   * Toggle between 2D and 3D mode
+   */
+  const toggle2D3D = () => {
+    const newMode = poseService.current.toggle2D3D();
+    setStatus(`Switched to ${newMode ? '3D' : '2D'} mode`);
+    setTimeout(() => setStatus('Ready to dance!'), 2000);
   };
 
   /**
@@ -315,7 +339,8 @@ export const usePoseDetectorController = () => {
     performanceMetrics,
     showData,
     exportLandmarkData,
-    toggleDataPanel
+    toggleDataPanel,
+    toggle2D3D
   };
 };
 

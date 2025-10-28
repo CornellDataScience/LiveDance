@@ -1,495 +1,572 @@
 """
-LiveDance Backend - Python Pose Estimation Server
-Flask server that processes video frames and returns pose landmarks
-Uses MediaPipe for both body and hand tracking
+LiveDance Backend - Python Pose Estimation Server with WebSocket
+Flask-SocketIO server with latest-wins buffer for stable real-time pose estimation
+Uses MediaPipe for both body and hand tracking with LIVE_STREAM mode
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 import mediapipe as mp
 import cv2
 import numpy as np
-from io import BytesIO
 from PIL import Image
 import torch
 import torch.nn as nn
 from collections import deque
 import math
 import time
+import base64
+import threading
+from io import BytesIO
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25)
 
-# Initialize MediaPipe
+# =============================================================================
+# LATEST-WINS BUFFER - Core of the optimization
+# =============================================================================
+class LatestFrameBuffer:
+    """
+    Single-slot buffer that only keeps the newest frame.
+    Older frames are discarded by design to prevent queue buildup.
+    """
+    def __init__(self):
+        self.frame_data = None
+        self.lock = threading.Lock()
+        self.dropped_count = 0
+        
+    def put(self, frame_bytes, timestamp, sequence, use3D=True):
+        """Store new frame, discarding any previous frame"""
+        with self.lock:
+            if self.frame_data is not None:
+                self.dropped_count += 1
+            self.frame_data = {
+                'bytes': frame_bytes,
+                'timestamp': timestamp,
+                'sequence': sequence,
+                'use3D': use3D
+            }
+    
+    def get(self):
+        """Get and clear the latest frame"""
+        with self.lock:
+            data = self.frame_data
+            self.frame_data = None
+            return data
+    
+    def get_stats(self):
+        """Get dropped frame count"""
+        with self.lock:
+            count = self.dropped_count
+            self.dropped_count = 0
+            return count
+
+# Global buffer instance
+frame_buffer = LatestFrameBuffer()
+
+# =============================================================================
+# MediaPipe Setup for LIVE_STREAM mode
+# =============================================================================
 mp_pose = mp.solutions.pose
 mp_hands = mp.solutions.hands
 
-# Create pose and hands detectors
+# Initialize detectors
 pose = mp_pose.Pose(
-    static_image_mode=True,
+    static_image_mode=False,  # LIVE_STREAM mode
     model_complexity=1,
+    smooth_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
 )
 
 hands = mp_hands.Hands(
-    static_image_mode=True,
+    static_image_mode=False,  # LIVE_STREAM mode
     max_num_hands=2,
     model_complexity=1,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
 )
 
+# Monotonic timestamp generator
+class TimestampGenerator:
+    def __init__(self):
+        self.last_timestamp = 0
+        self.lock = threading.Lock()
+    
+    def get_next(self):
+        """Generate strictly monotonic increasing timestamps"""
+        with self.lock:
+            current = int(time.monotonic() * 1000000)  # microseconds
+            if current <= self.last_timestamp:
+                current = self.last_timestamp + 1
+            self.last_timestamp = current
+            return current
+
+timestamp_gen = TimestampGenerator()
+
+# =============================================================================
 # Landmark names
+# =============================================================================
 BODY_KEYPOINT_NAMES = [
-    "nose",
-    "left_eye_inner",
-    "left_eye",
-    "left_eye_outer",
-    "right_eye_inner",
-    "right_eye",
-    "right_eye_outer",
-    "left_ear",
-    "right_ear",
-    "mouth_left",
-    "mouth_right",
-    "left_shoulder",
-    "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
-    "left_pinky",
-    "right_pinky",
-    "left_index",
-    "right_index",
-    "left_thumb",
-    "right_thumb",
-    "left_hip",
-    "right_hip",
-    "left_knee",
-    "right_knee",
-    "left_ankle",
-    "right_ankle",
-    "left_heel",
-    "right_heel",
-    "left_foot_index",
-    "right_foot_index",
+    "nose", "left_eye_inner", "left_eye", "left_eye_outer",
+    "right_eye_inner", "right_eye", "right_eye_outer",
+    "left_ear", "right_ear", "mouth_left", "mouth_right",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_pinky", "right_pinky",
+    "left_index", "right_index", "left_thumb", "right_thumb",
+    "left_hip", "right_hip", "left_knee", "right_knee",
+    "left_ankle", "right_ankle", "left_heel", "right_heel",
+    "left_foot_index", "right_foot_index",
 ]
 
-# Map to match MoveNet keypoint order (simplified to 17 points)
 MOVENET_INDICES = [0, 2, 5, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
 MOVENET_NAMES = [
-    "nose",
-    "left_eye",
-    "right_eye",
-    "left_ear",
-    "right_ear",
-    "left_shoulder",
-    "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_wrist",
-    "right_wrist",
-    "left_hip",
-    "right_hip",
-    "left_knee",
-    "right_knee",
-    "left_ankle",
-    "right_ankle",
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
 ]
 
 HAND_LANDMARK_NAMES = [
-    "wrist",
-    "thumb_cmc",
-    "thumb_mcp",
-    "thumb_ip",
-    "thumb_tip",
-    "index_mcp",
-    "index_pip",
-    "index_dip",
-    "index_tip",
-    "middle_mcp",
-    "middle_pip",
-    "middle_dip",
-    "middle_tip",
-    "ring_mcp",
-    "ring_pip",
-    "ring_dip",
-    "ring_tip",
-    "pinky_mcp",
-    "pinky_pip",
-    "pinky_dip",
-    "pinky_tip",
+    "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
+    "index_mcp", "index_pip", "index_dip", "index_tip",
+    "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
+    "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
+    "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
 ]
 
 # =============================================================================
-# METHOD 1: MediaPipe 3D World Landmarks
+# 3D Pose Estimation - MediaPipe World Landmarks
 # =============================================================================
+def calculate_angle_3d(p1, p2, p3):
+    """Calculate angle between three 3D points (in degrees)"""
+    v1 = np.array([p1.x - p2.x, p1.y - p2.y, p1.z - p2.z])
+    v2 = np.array([p3.x - p2.x, p3.y - p2.y, p3.z - p2.z])
+    
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+    
+    if norm_v1 < 1e-6 or norm_v2 < 1e-6:
+        return 0.0
+    
+    v1_normalized = v1 / norm_v1
+    v2_normalized = v2 / norm_v2
+    
+    cos_angle = np.clip(np.dot(v1_normalized, v2_normalized), -1.0, 1.0)
+    angle_rad = np.arccos(cos_angle)
+    angle_deg = np.degrees(angle_rad)
+    
+    return round(angle_deg, 1)
 
-def calculate_3d_angles_mediapipe(landmarks_3d):
-    """
-    Calculate joint angles and coordinates from MediaPipe 3D world landmarks
-    """
+def calculate_3d_angles_mediapipe(world_landmarks):
+    """Calculate joint angles from MediaPipe 3D world landmarks"""
     angles = {}
-    coordinates = {}
+    coords = {}
     
-    if len(landmarks_3d) < 33:  # MediaPipe pose has 33 landmarks
-        return angles, coordinates
-    
-    # Store coordinates for key joints
-    key_joints = {
-        'left_shoulder': 11, 'right_shoulder': 12,
-        'left_elbow': 13, 'right_elbow': 14,
-        'left_wrist': 15, 'right_wrist': 16,
-        'left_hip': 23, 'right_hip': 24,
-        'left_knee': 25, 'right_knee': 26,
-        'left_ankle': 27, 'right_ankle': 28
-    }
-    
-    for joint_name, idx in key_joints.items():
-        if idx < len(landmarks_3d):
-            lm = landmarks_3d[idx]
-            coordinates[joint_name] = {
+    if len(world_landmarks) >= 33:
+        # Left elbow
+        angles['left_elbow'] = calculate_angle_3d(
+            world_landmarks[11], world_landmarks[13], world_landmarks[15]
+        )
+        # Right elbow
+        angles['right_elbow'] = calculate_angle_3d(
+            world_landmarks[12], world_landmarks[14], world_landmarks[16]
+        )
+        # Left knee
+        angles['left_knee'] = calculate_angle_3d(
+            world_landmarks[23], world_landmarks[25], world_landmarks[27]
+        )
+        # Right knee
+        angles['right_knee'] = calculate_angle_3d(
+            world_landmarks[24], world_landmarks[26], world_landmarks[28]
+        )
+        # Left shoulder
+        angles['left_shoulder'] = calculate_angle_3d(
+            world_landmarks[13], world_landmarks[11], world_landmarks[23]
+        )
+        # Right shoulder
+        angles['right_shoulder'] = calculate_angle_3d(
+            world_landmarks[14], world_landmarks[12], world_landmarks[24]
+        )
+        # Left hip
+        angles['left_hip'] = calculate_angle_3d(
+            world_landmarks[11], world_landmarks[23], world_landmarks[25]
+        )
+        # Right hip
+        angles['right_hip'] = calculate_angle_3d(
+            world_landmarks[12], world_landmarks[24], world_landmarks[26]
+        )
+        
+        # Extract 3D coordinates for key joints
+        key_joints = {
+            'left_shoulder': 11, 'right_shoulder': 12,
+            'left_elbow': 13, 'right_elbow': 14,
+            'left_wrist': 15, 'right_wrist': 16,
+            'left_hip': 23, 'right_hip': 24,
+            'left_knee': 25, 'right_knee': 26,
+            'left_ankle': 27, 'right_ankle': 28,
+        }
+        
+        for joint_name, idx in key_joints.items():
+            lm = world_landmarks[idx]
+            coords[joint_name] = {
                 'x': round(lm.x, 3),
-                'y': round(lm.y, 3), 
+                'y': round(lm.y, 3),
                 'z': round(lm.z, 3)
             }
     
-    # Define joint connections for angle calculations
-    joint_pairs = {
-        'left_elbow': (11, 13, 15),  # shoulder, elbow, wrist
-        'right_elbow': (12, 14, 16),
-        'left_knee': (23, 25, 27),   # hip, knee, ankle
-        'right_knee': (24, 26, 28),
-        'left_shoulder': (11, 12, 13),  # shoulder angle
-        'right_shoulder': (12, 11, 14),
-        'left_hip': (23, 24, 25),     # hip angle
-        'right_hip': (24, 23, 26),
-    }
-    
-    for angle_name, (p1_idx, p2_idx, p3_idx) in joint_pairs.items():
-        if p1_idx < len(landmarks_3d) and p2_idx < len(landmarks_3d) and p3_idx < len(landmarks_3d):
-            p1 = np.array([landmarks_3d[p1_idx].x, landmarks_3d[p1_idx].y, landmarks_3d[p1_idx].z])
-            p2 = np.array([landmarks_3d[p2_idx].x, landmarks_3d[p2_idx].y, landmarks_3d[p2_idx].z])
-            p3 = np.array([landmarks_3d[p3_idx].x, landmarks_3d[p3_idx].y, landmarks_3d[p3_idx].z])
-            
-            # Calculate vectors
-            v1 = p1 - p2
-            v2 = p3 - p2
-            
-            # Calculate angle in degrees
-            cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-            cos_angle = np.clip(cos_angle, -1.0, 1.0)  # Clamp to avoid numerical errors
-            angle = np.arccos(cos_angle) * 180.0 / np.pi
-            
-            angles[angle_name] = round(angle, 1)
-    
-    return angles, coordinates
+    return angles, coords
 
 # =============================================================================
-# METHOD 2: Temporal 1D-Conv Model for 3D Pose Estimation
+# EMA Smoothing for pose stability
 # =============================================================================
-
-class TemporalPose3D(nn.Module):
-    """
-    Small temporal 1D-conv model for 3D pose estimation from 2D keypoints
-    Based on VideoPose3D architecture but simplified
-    """
-    def __init__(self, input_dim=34, hidden_dim=64, output_dim=51, temporal_window=9):
-        super(TemporalPose3D, self).__init__()
-        self.temporal_window = temporal_window
-        self.input_dim = input_dim  # 17 keypoints * 2 (x, y)
-        self.output_dim = output_dim  # 17 keypoints * 3 (x, y, z)
+class PoseSmoothing:
+    """Exponential Moving Average smoothing for pose keypoints"""
+    def __init__(self, alpha=0.7):
+        self.alpha = alpha  # Higher = more weight to new values
+        self.smoothed_body = None
+        self.smoothed_hands = {'left': None, 'right': None}
+        self.smoothed_3d_angles = None
+        self.smoothed_3d_coords = None
+    
+    def smooth_body(self, landmarks):
+        """Smooth body landmarks"""
+        if not landmarks:
+            return landmarks
         
-        # Temporal convolution layers
-        self.conv1 = nn.Conv1d(input_dim, hidden_dim, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+        if self.smoothed_body is None:
+            self.smoothed_body = landmarks
+            return landmarks
         
-        # Output layer
-        self.output_conv = nn.Conv1d(hidden_dim, output_dim, kernel_size=1)
+        smoothed = []
+        for i, lm in enumerate(landmarks):
+            if i < len(self.smoothed_body):
+                prev = self.smoothed_body[i]
+                smoothed.append({
+                    'name': lm['name'],
+                    'x': self.alpha * lm['x'] + (1 - self.alpha) * prev['x'],
+                    'y': self.alpha * lm['y'] + (1 - self.alpha) * prev['y'],
+                    'confidence': lm['confidence'],
+                    'visible': lm['visible']
+                })
+            else:
+                smoothed.append(lm)
         
-        # Activation and normalization
-        self.relu = nn.ReLU()
-        self.bn1 = nn.BatchNorm1d(hidden_dim)
-        self.bn2 = nn.BatchNorm1d(hidden_dim)
-        self.bn3 = nn.BatchNorm1d(hidden_dim)
+        self.smoothed_body = smoothed
+        return smoothed
+    
+    def smooth_hands(self, hands_data):
+        """Smooth hand landmarks"""
+        smoothed_hands = {'left': [], 'right': []}
         
-    def forward(self, x):
-        # x shape: (batch, temporal_window, input_dim)
-        x = x.transpose(1, 2)  # (batch, input_dim, temporal_window)
-        
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.relu(self.bn3(self.conv3(x)))
-        
-        x = self.output_conv(x)
-        x = x.transpose(1, 2)  # (batch, temporal_window, output_dim)
-        
-        # Return only the last frame's prediction
-        return x[:, -1, :]  # (batch, output_dim)
-
-# Global temporal model and buffer
-temporal_model = None
-pose_buffer = deque(maxlen=9)  # Buffer for 9 frames
-
-def initialize_temporal_model():
-    """Initialize the temporal model"""
-    global temporal_model
-    if temporal_model is None:
-        temporal_model = TemporalPose3D(input_dim=34, hidden_dim=64, output_dim=51, temporal_window=9)
-        # Load pre-trained weights if available, otherwise use random initialization
-        # temporal_model.load_state_dict(torch.load('temporal_pose3d.pth'))
-        temporal_model.eval()
-
-def predict_3d_pose_temporal(keypoints_2d):
-    """
-    Predict 3D pose using temporal model
-    keypoints_2d: list of 2D keypoints (17 points with x, y coordinates)
-    """
-    global temporal_model, pose_buffer
-    
-    if temporal_model is None:
-        initialize_temporal_model()
-    
-    # Convert to numpy array and normalize
-    keypoints_array = np.array(keypoints_2d).flatten()  # Shape: (34,)
-    
-    # Add to buffer
-    pose_buffer.append(keypoints_array)
-    
-    # Need at least temporal_window frames
-    if len(pose_buffer) < temporal_model.temporal_window:
-        return None
-    
-    # Convert buffer to tensor
-    buffer_array = np.array(list(pose_buffer))  # Shape: (temporal_window, 34)
-    buffer_tensor = torch.FloatTensor(buffer_array).unsqueeze(0)  # Shape: (1, temporal_window, 34)
-    
-    # Predict 3D pose
-    with torch.no_grad():
-        pose_3d = temporal_model(buffer_tensor)  # Shape: (1, 51)
-        pose_3d = pose_3d.squeeze(0).numpy()  # Shape: (51,)
-    
-    # Reshape to (17, 3)
-    pose_3d = pose_3d.reshape(17, 3)
-    
-    return pose_3d
-
-def calculate_3d_angles_temporal(pose_3d):
-    """
-    Calculate joint angles and coordinates from temporal model 3D pose
-    pose_3d: numpy array of shape (17, 3) with x, y, z coordinates
-    """
-    angles = {}
-    coordinates = {}
-    
-    if pose_3d is None or pose_3d.shape != (17, 3):
-        return angles, coordinates
-    
-    # Store coordinates for key joints (17-point format)
-    key_joints = {
-        'left_shoulder': 5, 'right_shoulder': 6,
-        'left_elbow': 7, 'right_elbow': 8,
-        'left_wrist': 9, 'right_wrist': 10,
-        'left_hip': 11, 'right_hip': 12,
-        'left_knee': 13, 'right_knee': 14,
-        'left_ankle': 15, 'right_ankle': 16
-    }
-    
-    for joint_name, idx in key_joints.items():
-        if idx < 17:
-            coordinates[joint_name] = {
-                'x': round(float(pose_3d[idx][0]), 3),
-                'y': round(float(pose_3d[idx][1]), 3),
-                'z': round(float(pose_3d[idx][2]), 3)
-            }
-    
-    # Define joint connections for angle calculations (using 17-point format)
-    joint_pairs = {
-        'left_elbow': (5, 7, 9),   # shoulder, elbow, wrist
-        'right_elbow': (6, 8, 10),
-        'left_knee': (11, 13, 15), # hip, knee, ankle
-        'right_knee': (12, 14, 16),
-        'left_shoulder': (5, 6, 7),  # shoulder angle
-        'right_shoulder': (6, 5, 8),
-        'left_hip': (11, 12, 13),    # hip angle
-        'right_hip': (12, 11, 14),
-    }
-    
-    for angle_name, (p1_idx, p2_idx, p3_idx) in joint_pairs.items():
-        if p1_idx < 17 and p2_idx < 17 and p3_idx < 17:
-            p1 = pose_3d[p1_idx]
-            p2 = pose_3d[p2_idx]
-            p3 = pose_3d[p3_idx]
+        for side in ['left', 'right']:
+            landmarks = hands_data.get(side, [])
+            if not landmarks:
+                self.smoothed_hands[side] = None
+                continue
             
-            # Calculate vectors
-            v1 = p1 - p2
-            v2 = p3 - p2
+            if self.smoothed_hands[side] is None:
+                self.smoothed_hands[side] = landmarks
+                smoothed_hands[side] = landmarks
+                continue
             
-            # Calculate angle in degrees
-            cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-            cos_angle = np.clip(cos_angle, -1.0, 1.0)  # Clamp to avoid numerical errors
-            angle = np.arccos(cos_angle) * 180.0 / np.pi
+            smoothed = []
+            for i, lm in enumerate(landmarks):
+                if i < len(self.smoothed_hands[side]):
+                    prev = self.smoothed_hands[side][i]
+                    smoothed.append({
+                        'name': lm['name'],
+                        'x': self.alpha * lm['x'] + (1 - self.alpha) * prev['x'],
+                        'y': self.alpha * lm['y'] + (1 - self.alpha) * prev['y'],
+                        'z': lm.get('z', 0),
+                        'normalized_x': lm.get('normalized_x', 0),
+                        'normalized_y': lm.get('normalized_y', 0)
+                    })
+                else:
+                    smoothed.append(lm)
             
-            angles[angle_name] = round(angle, 1)
-    
-    return angles, coordinates
-
-
-@app.route("/health", methods=["GET"])
-def health_check():
-    """Simple health check endpoint"""
-    return jsonify({"status": "ok"}), 200
-
-
-@app.route("/estimate_pose", methods=["POST"])
-def estimate_pose():
-    """
-    Process video frame and return body and hand landmarks with 3D pose estimation
-    Expects: multipart/form-data with 'image' file
-    Returns: JSON with body, hands landmark data, and 3D pose angles
-    """
-    print("📥 Received pose estimation request")
-    request_start = time.perf_counter()
-    timings = {}
-    
-    try:
-        # Get image from request
-        if "image" not in request.files:
-            print("❌ No 'image' field in request.files")
-            return jsonify({"error": "No image provided"}), 400
-
-        file = request.files["image"]
-        print(f"✅ Received image file: {file.filename}")
-
-        # Image decoding timing
-        decode_start = time.perf_counter()
-        image = Image.open(BytesIO(file.read()))
-        image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-        height, width = image.shape[:2]
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        timings['image_decode'] = (time.perf_counter() - decode_start) * 1000
-
-        # Process body pose
-        pose_start = time.perf_counter()
-        pose_results = pose.process(image_rgb)
-        timings['pose_detection'] = (time.perf_counter() - pose_start) * 1000
+            self.smoothed_hands[side] = smoothed
+            smoothed_hands[side] = smoothed
         
-        body_landmarks = []
-        pose_3d_angles = {}
-        pose_3d_coords = {}
+        return smoothed_hands
+    
+    def smooth_3d_angles(self, angles):
+        """Smooth 3D angles"""
+        if not angles:
+            return angles
+        
+        if self.smoothed_3d_angles is None:
+            self.smoothed_3d_angles = angles
+            return angles
+        
+        smoothed = {}
+        for key, value in angles.items():
+            if key in self.smoothed_3d_angles:
+                smoothed[key] = self.alpha * value + (1 - self.alpha) * self.smoothed_3d_angles[key]
+            else:
+                smoothed[key] = value
+        
+        self.smoothed_3d_angles = smoothed
+        return smoothed
+    
+    def smooth_3d_coords(self, coords):
+        """Smooth 3D coordinates"""
+        if not coords:
+            return coords
+        
+        if self.smoothed_3d_coords is None:
+            self.smoothed_3d_coords = coords
+            return coords
+        
+        smoothed = {}
+        for joint, coord in coords.items():
+            if joint in self.smoothed_3d_coords:
+                smoothed[joint] = {
+                    'x': self.alpha * coord['x'] + (1 - self.alpha) * self.smoothed_3d_coords[joint]['x'],
+                    'y': self.alpha * coord['y'] + (1 - self.alpha) * self.smoothed_3d_coords[joint]['y'],
+                    'z': self.alpha * coord['z'] + (1 - self.alpha) * self.smoothed_3d_coords[joint]['z']
+                }
+            else:
+                smoothed[joint] = coord
+        
+        self.smoothed_3d_coords = smoothed
+        return smoothed
 
-        if pose_results.pose_landmarks:
-            print(f"✅ Detected {len(pose_results.pose_landmarks.landmark)} pose landmarks")
-            landmarks = pose_results.pose_landmarks.landmark
+# Global smoothing instance
+smoother = PoseSmoothing(alpha=0.7)
 
-            # Extract only the 17 keypoints matching MoveNet format
+# =============================================================================
+# Frame downscaling for performance
+# =============================================================================
+def downscale_frame(image, target_short_side=384):
+    """Downscale image to target short side while maintaining aspect ratio"""
+    height, width = image.shape[:2]
+    
+    if height < width:
+        if height <= target_short_side:
+            return image
+        scale = target_short_side / height
+    else:
+        if width <= target_short_side:
+            return image
+        scale = target_short_side / width
+    
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+    
+    return cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+
+# =============================================================================
+# Inference Thread - Consumes frames from latest-wins buffer
+# =============================================================================
+inference_running = False
+inference_thread = None
+processed_frame_count = 0
+
+def inference_loop():
+    """Main inference loop that processes frames from the buffer"""
+    global processed_frame_count
+    
+    print("🔄 Inference thread started")
+    
+    while inference_running:
+        # Get the latest frame from buffer
+        frame_data = frame_buffer.get()
+        
+        if frame_data is None:
+            time.sleep(0.001)  # 1ms sleep if no frame available
+            continue
+        
+        try:
+            # Timing instrumentation
+            timings = {}
+            process_start = time.perf_counter()
+            
+            # Decode image
+            decode_start = time.perf_counter()
+            image_bytes = base64.b64decode(frame_data['bytes'])
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            timings['image_decode'] = (time.perf_counter() - decode_start) * 1000
+            
+            if image is None:
+                continue
+            
+            # Store original dimensions BEFORE downscaling (FIX for skeleton offset)
+            original_height, original_width = image.shape[:2]
+            
+            # Downscale for performance
+            downscale_start = time.perf_counter()
+            image = downscale_frame(image, target_short_side=384)
+            timings['downscale'] = (time.perf_counter() - downscale_start) * 1000
+            
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            height, width = image.shape[:2]  # Downscaled dimensions
+            
+            # Process pose
+            pose_start = time.perf_counter()
+            pose_results = pose.process(image_rgb)
+            timings['pose_detection'] = (time.perf_counter() - pose_start) * 1000
+            
+            # Process hands
+            hands_start = time.perf_counter()
+            hand_results = hands.process(image_rgb)
+            timings['hand_detection'] = (time.perf_counter() - hands_start) * 1000
+            
+            # Extract body landmarks
+            body_landmarks = []
             keypoints_2d = []
-            for idx, name in zip(MOVENET_INDICES, MOVENET_NAMES):
-                if idx < len(landmarks):
-                    lm = landmarks[idx]
-                    body_landmarks.append(
-                        {
+            pose_3d_angles = {}
+            pose_3d_coords = {}
+            
+            if pose_results.pose_landmarks:
+                landmarks = pose_results.pose_landmarks.landmark
+                
+                for idx, name in zip(MOVENET_INDICES, MOVENET_NAMES):
+                    if idx < len(landmarks):
+                        lm = landmarks[idx]
+                        body_landmarks.append({
                             "name": name,
-                            "x": round(lm.x * width, 1),
-                            "y": round(lm.y * height, 1),
+                            "x": round(lm.x * original_width, 1),  # Use ORIGINAL dimensions
+                            "y": round(lm.y * original_height, 1),  # Use ORIGINAL dimensions
                             "confidence": round(lm.visibility * 100),
                             "visible": lm.visibility > 0.3,
-                        }
-                    )
-                    # Collect 2D keypoints for temporal model
-                    keypoints_2d.append([lm.x, lm.y])
-
-            # =============================================================================
-            # 3D POSE ESTIMATION - CHOOSE ONE METHOD BY COMMENTING OUT THE OTHER
-            # =============================================================================
+                        })
+                        keypoints_2d.append([lm.x, lm.y])
+                
+                # 3D pose estimation using MediaPipe world landmarks (only if use3D is True)
+                use3D = frame_data.get('use3D', True)
+                angles_start = time.perf_counter()
+                if use3D and pose_results.pose_world_landmarks:
+                    world_landmarks = pose_results.pose_world_landmarks.landmark
+                    pose_3d_angles, pose_3d_coords = calculate_3d_angles_mediapipe(world_landmarks)
+                timings['3d_calculation'] = (time.perf_counter() - angles_start) * 1000
             
-            # METHOD 1: MediaPipe 3D World Landmarks (UNCOMMENT TO USE)
-            # =============================================================================
-            angles_start = time.perf_counter()
-            if pose_results.pose_world_landmarks:
-                world_landmarks = pose_results.pose_world_landmarks.landmark
-                pose_3d_angles, pose_3d_coords = calculate_3d_angles_mediapipe(world_landmarks)
-            timings['3d_calculation'] = (time.perf_counter() - angles_start) * 1000
+            # Extract hand landmarks
+            hand_landmarks = {"left": [], "right": []}
             
-            # METHOD 2: Temporal 1D-Conv Model (UNCOMMENT TO USE)
-            # =============================================================================
-            # angles_start = time.perf_counter()
-            # if len(keypoints_2d) == 17:  # Ensure we have all 17 keypoints
-            #     pose_3d = predict_3d_pose_temporal(keypoints_2d)
-            #     if pose_3d is not None:
-            #         pose_3d_angles, pose_3d_coords = calculate_3d_angles_temporal(pose_3d)
-            # timings['3d_calculation'] = (time.perf_counter() - angles_start) * 1000
-
-        # Process hands
-        hands_start = time.perf_counter()
-        hand_results = hands.process(image_rgb)
-        hand_landmarks = {"left": [], "right": []}
-
-        if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-            for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
-                # Determine hand side
-                handedness = (
-                    hand_results.multi_handedness[hand_idx].classification[0].label
-                )
-                hand_side = handedness.lower()
-
-                # Extract landmarks
-                hand_data = []
-                for lm_idx, lm in enumerate(hand_lms.landmark):
-                    hand_data.append(
-                        {
+            if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
+                for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
+                    handedness = hand_results.multi_handedness[hand_idx].classification[0].label
+                    hand_side = handedness.lower()
+                    
+                    hand_data = []
+                    for lm_idx, lm in enumerate(hand_lms.landmark):
+                        hand_data.append({
                             "name": HAND_LANDMARK_NAMES[lm_idx],
-                            "x": round(lm.x * width, 1),
-                            "y": round(lm.y * height, 1),
+                            "x": round(lm.x * original_width, 1),  # Use ORIGINAL dimensions
+                            "y": round(lm.y * original_height, 1),  # Use ORIGINAL dimensions
                             "z": round(lm.z, 3),
                             "normalized_x": round(lm.x, 3),
                             "normalized_y": round(lm.y, 3),
-                        }
-                    )
+                        })
+                    
+                    hand_landmarks[hand_side] = hand_data
+            
+            # Apply EMA smoothing
+            smooth_start = time.perf_counter()
+            body_landmarks = smoother.smooth_body(body_landmarks)
+            hand_landmarks = smoother.smooth_hands(hand_landmarks)
+            if use3D:
+                pose_3d_angles = smoother.smooth_3d_angles(pose_3d_angles)
+                pose_3d_coords = smoother.smooth_3d_coords(pose_3d_coords)
+            timings['smoothing'] = (time.perf_counter() - smooth_start) * 1000
+            
+            # Total backend time
+            total_backend_time = (time.perf_counter() - process_start) * 1000
+            timings['total_backend'] = total_backend_time
+            
+            processed_frame_count += 1
+            
+            # Get dropped frame stats
+            dropped = frame_buffer.get_stats()
+            
+            # Log performance every 30 frames
+            if processed_frame_count % 30 == 0:
+                print(f"⚡ Backend [Frame {processed_frame_count}]: "
+                      f"Decode: {timings['image_decode']:.1f}ms | "
+                      f"Downscale: {timings['downscale']:.1f}ms | "
+                      f"Pose: {timings['pose_detection']:.1f}ms | "
+                      f"3D: {timings.get('3d_calculation', 0):.1f}ms | "
+                      f"Hands: {timings['hand_detection']:.1f}ms | "
+                      f"Smooth: {timings['smoothing']:.1f}ms | "
+                      f"TOTAL: {total_backend_time:.1f}ms | "
+                      f"Dropped: {dropped}")
+            
+            # Emit result back to client via WebSocket
+            socketio.emit('pose_result', {
+                'body': body_landmarks,
+                'hands': hand_landmarks,
+                'pose_3d_angles': pose_3d_angles if use3D else {},
+                'pose_3d_coords': pose_3d_coords if use3D else {},
+                'timings': timings,
+                'sequence': frame_data['sequence'],
+                'mode': '3D' if use3D else '2D'
+            })
+            
+        except Exception as e:
+            print(f"❌ Error in inference loop: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    print("🛑 Inference thread stopped")
 
-                hand_landmarks[hand_side] = hand_data
+# =============================================================================
+# WebSocket Event Handlers
+# =============================================================================
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    global inference_running, inference_thread
+    
+    print("🔌 Client connected via WebSocket")
+    
+    # Start inference thread if not running
+    if not inference_running:
+        inference_running = True
+        inference_thread = threading.Thread(target=inference_loop, daemon=True)
+        inference_thread.start()
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    print("🔌 Client disconnected")
+
+@socketio.on('frame')
+def handle_frame(data):
+    """
+    Receive frame from client and put in latest-wins buffer.
+    Old frames are automatically discarded.
+    """
+    try:
+        frame_bytes = data.get('image')
+        timestamp = data.get('timestamp', time.time())
+        sequence = data.get('sequence', 0)
+        use3D = data.get('use3D', True)  # Get mode from client
         
-        timings['hand_detection'] = (time.perf_counter() - hands_start) * 1000
-
-        # Calculate total backend time
-        total_backend_time = (time.perf_counter() - request_start) * 1000
-        timings['total_backend'] = total_backend_time
+        # Put frame in buffer (overwrites any existing frame)
+        frame_buffer.put(frame_bytes, timestamp, sequence, use3D)
         
-        # Log performance to console
-        print(f"🔥 Backend: Decode: {timings['image_decode']:.1f}ms | "
-              f"Pose: {timings['pose_detection']:.1f}ms | "
-              f"3D: {timings.get('3d_calculation', 0):.1f}ms | "
-              f"Hands: {timings['hand_detection']:.1f}ms | "
-              f"TOTAL: {total_backend_time:.1f}ms")
-
-        # Return results with 3D pose angles and coordinates
-        return jsonify({
-            "body": body_landmarks, 
-            "hands": hand_landmarks,
-            "pose_3d_angles": pose_3d_angles,
-            "pose_3d_coords": pose_3d_coords,
-            "timings": timings
-        })
-
     except Exception as e:
-        print(f"Error processing frame: {e}")
-        return (
-            jsonify({
-                "body": [], 
-                "hands": {"left": [], "right": []},
-                "pose_3d_angles": {},
-                "pose_3d_coords": {}
-            }),
-            200,
-        )  # Return empty data instead of error
+        print(f"❌ Error receiving frame: {e}")
 
+# =============================================================================
+# Health Check Endpoint
+# =============================================================================
+@socketio.on('health')
+def handle_health():
+    """Health check endpoint"""
+    emit('health_response', {'status': 'ok'})
 
-
+# =============================================================================
+# Server Startup
+# =============================================================================
 if __name__ == "__main__":
-    print("🚀 LiveDance Python Backend Starting...")
+    print("🚀 LiveDance Python Backend Starting (WebSocket Mode)...")
     print("📡 Server running at http://localhost:8000")
-    print("💃 Ready to track dance poses!")
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    print("💃 Ready to track dance poses with latest-wins buffer!")
+    print("🎯 Features: LIVE_STREAM mode | EMA smoothing | Frame downscaling | Coordinate fixes")
+    socketio.run(app, host="0.0.0.0", port=8000, debug=False, allow_unsafe_werkzeug=True)
