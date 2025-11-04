@@ -1,6 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
 import PoseEstimationService from '../services/PoseEstimationService';
 
+const TRACKED_HAND_LANDMARKS = [
+  'wrist',
+  'thumb_cmc',
+  'thumb_tip',
+  'index_mcp',
+  'index_tip',
+  'middle_mcp',
+  'middle_tip',
+  'ring_mcp',
+  'ring_tip',
+  'pinky_mcp',
+  'pinky_tip'
+];
+
+const HAND_CONNECTIONS_BY_NAME = [
+  ['wrist', 'thumb_cmc'],
+  ['thumb_cmc', 'thumb_tip'],
+  ['wrist', 'index_mcp'],
+  ['index_mcp', 'index_tip'],
+  ['wrist', 'middle_mcp'],
+  ['middle_mcp', 'middle_tip'],
+  ['wrist', 'ring_mcp'],
+  ['ring_mcp', 'ring_tip'],
+  ['wrist', 'pinky_mcp'],
+  ['pinky_mcp', 'pinky_tip'],
+  ['thumb_cmc', 'index_mcp'],
+  ['index_mcp', 'middle_mcp'],
+  ['middle_mcp', 'ring_mcp'],
+  ['ring_mcp', 'pinky_mcp']
+];
+
 /**
  * Controller: Manages state and business logic for pose detection
  * Camera feed is captured in frontend, all pose estimation happens in Python backend
@@ -15,6 +46,8 @@ export const usePoseDetectorController = () => {
   const [isReady, setIsReady] = useState(false);
   const [bodyLandmarks, setBodyLandmarks] = useState([]);
   const [handLandmarks, setHandLandmarks] = useState({ left: [], right: [] });
+  const [pose3DAngles, setPose3DAngles] = useState({});
+  const [pose3DCoords, setPose3DCoords] = useState({});
   const [showData, setShowData] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState(null);
 
@@ -26,6 +59,16 @@ export const usePoseDetectorController = () => {
   const GESTURE_DURATION = 3000; // 3 seconds
   const videoPlayerControlRef = useRef(null);
   const gesturePositionRef = useRef(null); // Track hand position for stillness check
+
+  // Performance metrics state
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    fps: 0,
+    totalLatency: 0,
+    backendTime: 0,
+    networkLatency: 0,
+    frontendTime: 0,
+    backendBreakdown: {}
+  });
 
   // Service instance for backend communication
   const poseService = useRef(new PoseEstimationService());
@@ -177,21 +220,69 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Check Python backend availability
+   * Check Python backend availability and connect WebSocket
    */
   const checkBackend = async () => {
     try {
       setStatus('Connecting to pose estimation server...');
-      const isHealthy = await poseService.current.healthCheck();
       
-      if (isHealthy) {
-        setStatus('Ready to dance!');
-        setIsReady(true);
-        return true;
-      } else {
-        setStatus('⚠️ Backend server not running. Please start Python backend (port 8000)');
-        return false;
-      }
+      // Connect to WebSocket
+      await poseService.current.connect();
+      
+      // Set up pose result callback
+      poseService.current.onPoseResult = (poseData) => {
+        // Update state with received data
+        if (poseData.body) {
+          setBodyLandmarks(poseData.body);
+        }
+        
+        if (poseData.hands) {
+          setHandLandmarks(poseData.hands);
+        }
+        
+        if (poseData.pose_3d_angles) {
+          setPose3DAngles(poseData.pose_3d_angles);
+        }
+        
+        if (poseData.pose_3d_coords) {
+          setPose3DCoords(poseData.pose_3d_coords);
+        }
+        
+        // Update performance metrics
+        if (poseData.frontend_timings && poseData.timings) {
+          const totalTime = poseData.frontend_timings.total_frontend;
+          const networkLatency = poseData.frontend_timings.network_latency || 0;
+          const imageCaptureTime = poseData.frontend_timings.image_capture || 0;
+          
+          setPerformanceMetrics({
+            fps: poseData.fps || 0,
+            totalLatency: totalTime.toFixed(0),
+            backendTime: poseData.timings.total_backend?.toFixed(0) || '0',
+            networkLatency: networkLatency.toFixed(0),
+            frontendTime: imageCaptureTime.toFixed(0),
+            mode: poseData.mode || '3D',
+            backendBreakdown: {
+              decode: poseData.timings.image_decode?.toFixed(1) || '0.0',
+              downscale: poseData.timings.downscale?.toFixed(1) || '0.0',
+              pose: poseData.timings.pose_detection?.toFixed(1) || '0.0',
+              angles3d: poseData.timings['3d_calculation']?.toFixed(1) || '0.0',
+              hands: poseData.timings.hand_detection?.toFixed(1) || '0.0',
+              smoothing: poseData.timings.smoothing?.toFixed(1) || '0.0'
+            }
+          });
+        }
+        
+        // Draw skeleton with received data (using interpolated result)
+        const interpolatedData = poseService.current.getInterpolatedResult();
+        if (interpolatedData) {
+          drawSkeleton(interpolatedData);
+        }
+      };
+      
+      setStatus('Ready to dance!');
+      setIsReady(true);
+      return true;
+      
     } catch (error) {
       setStatus('⚠️ Unable to connect to backend. Please start Python server.');
       console.error('Backend connection error:', error);
@@ -258,39 +349,40 @@ export const usePoseDetectorController = () => {
     const drawHand = (landmarks) => {
       if (!landmarks || landmarks.length === 0) return;
 
-      const handConnections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
-        [0, 5], [5, 6], [6, 7], [7, 8],       // Index
-        [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
-        [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-        [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-        [5, 9], [9, 13], [13, 17]             // Palm
-      ];
+      const landmarkMap = {};
+      landmarks.forEach((landmark) => {
+        landmarkMap[landmark.name] = landmark;
+      });
 
       ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
 
-      handConnections.forEach(([i, j]) => {
-        const point1 = landmarks[i];
-        const point2 = landmarks[j];
-        
-        if (point1 && point2) {
+      HAND_CONNECTIONS_BY_NAME.forEach(([startName, endName]) => {
+        const startPoint = landmarkMap[startName];
+        const endPoint = landmarkMap[endName];
+
+        if (startPoint && endPoint) {
           ctx.beginPath();
-          ctx.moveTo(point1.x, point1.y);
-          ctx.lineTo(point2.x, point2.y);
+          ctx.moveTo(startPoint.x, startPoint.y);
+          ctx.lineTo(endPoint.x, endPoint.y);
           ctx.stroke();
         }
       });
 
-      landmarks.forEach((landmark) => {
+      TRACKED_HAND_LANDMARKS.forEach((name) => {
+        const landmark = landmarkMap[name];
+        if (!landmark) {
+          return;
+        }
+
         const gradient = ctx.createRadialGradient(
           landmark.x, landmark.y, 0,
           landmark.x, landmark.y, 8
         );
         gradient.addColorStop(0, '#40E0D0');
         gradient.addColorStop(1, '#1E90FF');
-        
+
         ctx.beginPath();
         ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
         ctx.fillStyle = gradient;
@@ -305,7 +397,8 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Main detection loop (sends frames to Python backend for pose estimation)
+   * Main detection loop (sends frames to Python backend via WebSocket at 60 FPS)
+   * Rendering happens via callback at inference speed with interpolation
    */
   const detectPose = async () => {
     if (!videoRef.current || videoRef.current.readyState !== 4 || !canvasRef.current) {
@@ -314,25 +407,21 @@ export const usePoseDetectorController = () => {
     }
 
     try {
-      // Send frame to Python backend for pose estimation
-      const poseData = await poseService.current.estimatePose(videoRef.current);
+      // Send frame to Python backend via WebSocket
+      // Result will come back asynchronously via callback
+      await poseService.current.sendFrame(videoRef.current);
       
-      // Update state with received data
-      if (poseData.body) {
-        setBodyLandmarks(poseData.body);
+      // Draw interpolated result for smooth 60 FPS rendering
+      const interpolatedData = poseService.current.getInterpolatedResult();
+      if (interpolatedData) {
+        drawSkeleton(interpolatedData);
       }
-      
-      if (poseData.hands) {
-        setHandLandmarks(poseData.hands);
-      }
-      
-      // Draw skeleton with received data
-      drawSkeleton(poseData);
       
     } catch (error) {
       console.error('Detection error:', error);
     }
 
+    // Continue loop at 60 FPS
     animationRef.current = requestAnimationFrame(detectPose);
   };
 
@@ -344,7 +433,9 @@ export const usePoseDetectorController = () => {
     const data = {
       timestamp,
       body: bodyLandmarks,
-      hands: handLandmarks
+      hands: handLandmarks,
+      pose3DAngles,
+      pose3DCoords
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -361,6 +452,15 @@ export const usePoseDetectorController = () => {
    */
   const toggleDataPanel = () => {
     setShowData(!showData);
+  };
+  
+  /**
+   * Toggle between 2D and 3D mode
+   */
+  const toggle2D3D = () => {
+    const newMode = poseService.current.toggle2D3D();
+    setStatus(`Switched to ${newMode ? '3D' : '2D'} mode`);
+    setTimeout(() => setStatus('Ready to dance!'), 2000);
   };
 
   /**
@@ -529,6 +629,9 @@ export const usePoseDetectorController = () => {
     isReady,
     bodyLandmarks,
     handLandmarks,
+    pose3DAngles,
+    pose3DCoords,
+    performanceMetrics,
     showData,
     exportLandmarkData,
     toggleDataPanel,
@@ -540,7 +643,8 @@ export const usePoseDetectorController = () => {
     setVideoPlaying,
     videoPlayerControlRef,
     gestureControlEnabled,
-    toggleGestureControl
+    toggleGestureControl,
+    // 2D/3D toggle
+    toggle2D3D
   };
 };
-
