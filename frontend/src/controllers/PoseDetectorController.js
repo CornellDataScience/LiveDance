@@ -18,9 +18,140 @@ export const usePoseDetectorController = () => {
   const [showData, setShowData] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState(null);
 
+  // Gesture detection state
+  const [gestureStartTime, setGestureStartTime] = useState(null);
+  const [gestureProgress, setGestureProgress] = useState(0);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [gestureControlEnabled, setGestureControlEnabled] = useState(true);
+  const GESTURE_DURATION = 3000; // 3 seconds
+  const videoPlayerControlRef = useRef(null);
+  const gesturePositionRef = useRef(null); // Track hand position for stillness check
+
   // Service instance for backend communication
   const poseService = useRef(new PoseEstimationService());
   const animationRef = useRef(null);
+
+  /**
+   * Check if hand is raised high (in upper portion of frame)
+   * Returns true if wrist is in upper 40% of frame
+   */
+  const isHandRaisedHigh = (landmarks) => {
+    if (!landmarks || landmarks.length === 0) return false;
+
+    // Wrist is landmark 0
+    const wrist = landmarks[0];
+
+    // Normalized y goes from 0 (top) to 1 (bottom)
+    // Check if wrist is in upper 40% of frame (y < 0.4)
+    return wrist.normalized_y < 0.4;
+  };
+
+  /**
+   * Check if hand is relatively still
+   * Returns true if hand hasn't moved much since gesture started
+   */
+  const isHandStill = (landmarks) => {
+    if (!landmarks || landmarks.length === 0) return false;
+    if (!gesturePositionRef.current) return true; // First check, consider it still
+
+    // Use wrist position (landmark 0) to check movement
+    const currentWrist = landmarks[0];
+    const previousWrist = gesturePositionRef.current;
+
+    // Calculate distance moved (in normalized coordinates)
+    const dx = currentWrist.normalized_x - previousWrist.normalized_x;
+    const dy = currentWrist.normalized_y - previousWrist.normalized_y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Allow small movement (0.05 = 5% of frame size)
+    return distance < 0.05;
+  };
+
+  /**
+   * Detect open palm gesture
+   * Returns true if all fingers are extended (fingertips above their base points)
+   */
+  const detectOpenPalm = (landmarks) => {
+    if (!landmarks || landmarks.length === 0) return false;
+
+    // MediaPipe hands uses 21 landmarks (0-20)
+    // We need at least the fingertips and base points
+    if (landmarks.length < 21) return false;
+
+    // Check if fingertips (indices 4, 8, 12, 16, 20) are extended
+    // by comparing their y-coordinates with their base knuckles
+    // Lower y value = higher on screen (extended)
+    const thumbExtended = landmarks[4].y < landmarks[2].y - 20; // Thumb tip vs thumb IP
+    const indexExtended = landmarks[8].y < landmarks[6].y;      // Index tip vs index DIP
+    const middleExtended = landmarks[12].y < landmarks[10].y;   // Middle tip vs middle DIP
+    const ringExtended = landmarks[16].y < landmarks[14].y;     // Ring tip vs ring DIP
+    const pinkyExtended = landmarks[20].y < landmarks[18].y;    // Pinky tip vs pinky DIP
+
+    const fingersExtended = [
+      thumbExtended,
+      indexExtended,
+      middleExtended,
+      ringExtended,
+      pinkyExtended
+    ];
+
+    // Consider it an open palm if at least 4 out of 5 fingers are extended
+    const extendedCount = fingersExtended.filter(Boolean).length;
+    return extendedCount >= 4;
+  };
+
+  /**
+   * Detect closed fist gesture
+   * Returns true if all fingers are curled (fingertips below their base points)
+   */
+  const detectClosedFist = (landmarks) => {
+    if (!landmarks || landmarks.length === 0) return false;
+
+    // MediaPipe hands uses 21 landmarks (0-20)
+    if (landmarks.length < 21) return false;
+
+    // Check if fingertips are curled (below their base knuckles)
+    // Higher y value = lower on screen (curled)
+    const thumbCurled = landmarks[4].y > landmarks[2].y + 10;   // Thumb tip vs thumb IP
+    const indexCurled = landmarks[8].y > landmarks[6].y + 10;   // Index tip vs index DIP
+    const middleCurled = landmarks[12].y > landmarks[10].y + 10; // Middle tip vs middle DIP
+    const ringCurled = landmarks[16].y > landmarks[14].y + 10;   // Ring tip vs ring DIP
+    const pinkyCurled = landmarks[20].y > landmarks[18].y + 10;  // Pinky tip vs pinky DIP
+
+    const fingersCurled = [
+      thumbCurled,
+      indexCurled,
+      middleCurled,
+      ringCurled,
+      pinkyCurled
+    ];
+
+    // Consider it a closed fist if at least 4 out of 5 fingers are curled
+    const curledCount = fingersCurled.filter(Boolean).length;
+    return curledCount >= 4;
+  };
+
+  /**
+   * Start video playback via ref callback
+   */
+  const startVideo = () => {
+    if (videoPlayerControlRef.current && !videoPlaying) {
+      videoPlayerControlRef.current.play();
+      setStatus('🎵 Video started! Enjoy dancing!');
+      setTimeout(() => setStatus('Ready to dance!'), 3000);
+    }
+  };
+
+  /**
+   * Pause video playback via ref callback
+   */
+  const pauseVideo = () => {
+    if (videoPlayerControlRef.current && videoPlaying) {
+      videoPlayerControlRef.current.pause();
+      setStatus('⏸️ Video paused!');
+      setTimeout(() => setStatus('Ready to dance!'), 3000);
+    }
+  };
 
   /**
    * Initialize camera
@@ -240,6 +371,13 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Toggle gesture control on/off
+   */
+  const toggleGestureControl = () => {
+    setGestureControlEnabled(!gestureControlEnabled);
+  };
+
+  /**
    * Initialize on mount
    */
   useEffect(() => {
@@ -268,6 +406,121 @@ export const usePoseDetectorController = () => {
     };
   }, [isReady]);
 
+  /**
+   * Reset gesture state when reference video changes
+   */
+  useEffect(() => {
+    setVideoPlaying(false);
+    setGestureStartTime(null);
+    setGestureProgress(0);
+  }, [referenceVideo]);
+
+  /**
+   * Monitor hand gestures and track hold duration
+   * Detects open palm for play and closed fist for pause
+   * With safeguards: hand must be raised high and relatively still
+   */
+  useEffect(() => {
+    // Only track gestures if enabled, ready, and video exists
+    if (!gestureControlEnabled || !isReady || !referenceVideo) {
+      // Clear any ongoing gesture tracking if disabled
+      if (gestureStartTime) {
+        setGestureStartTime(null);
+        setGestureProgress(0);
+        gesturePositionRef.current = null;
+      }
+      return;
+    }
+
+    // Check both hands for gestures
+    const rightHandOpen = handLandmarks.right && handLandmarks.right.length > 0
+      ? detectOpenPalm(handLandmarks.right)
+      : false;
+    const leftHandOpen = handLandmarks.left && handLandmarks.left.length > 0
+      ? detectOpenPalm(handLandmarks.left)
+      : false;
+
+    const rightHandClosed = handLandmarks.right && handLandmarks.right.length > 0
+      ? detectClosedFist(handLandmarks.right)
+      : false;
+    const leftHandClosed = handLandmarks.left && handLandmarks.left.length > 0
+      ? detectClosedFist(handLandmarks.left)
+      : false;
+
+    // Check position constraints (hand must be raised high)
+    const rightHandRaised = handLandmarks.right && handLandmarks.right.length > 0
+      ? isHandRaisedHigh(handLandmarks.right)
+      : false;
+    const leftHandRaised = handLandmarks.left && handLandmarks.left.length > 0
+      ? isHandRaisedHigh(handLandmarks.left)
+      : false;
+
+    // Determine which hand to track (prefer right, then left)
+    let activeHand = null;
+    let isGestureDetected = false;
+
+    if (rightHandOpen && rightHandRaised) {
+      activeHand = handLandmarks.right;
+      isGestureDetected = !videoPlaying;
+    } else if (rightHandClosed && rightHandRaised) {
+      activeHand = handLandmarks.right;
+      isGestureDetected = videoPlaying;
+    } else if (leftHandOpen && leftHandRaised) {
+      activeHand = handLandmarks.left;
+      isGestureDetected = !videoPlaying;
+    } else if (leftHandClosed && leftHandRaised) {
+      activeHand = handLandmarks.left;
+      isGestureDetected = videoPlaying;
+    }
+
+    // Check if hand is still (only after gesture starts)
+    const handIsStill = activeHand ? isHandStill(activeHand) : false;
+
+    if (isGestureDetected && activeHand) {
+      if (!gestureStartTime) {
+        // Start tracking gesture - record initial position
+        setGestureStartTime(Date.now());
+        gesturePositionRef.current = {
+          normalized_x: activeHand[0].normalized_x,
+          normalized_y: activeHand[0].normalized_y
+        };
+      } else {
+        // Check if hand is still moving too much
+        if (!handIsStill) {
+          // Reset if hand moved too much
+          setGestureStartTime(null);
+          setGestureProgress(0);
+          gesturePositionRef.current = null;
+          return;
+        }
+
+        // Update progress
+        const elapsed = Date.now() - gestureStartTime;
+        const progress = Math.min(elapsed / GESTURE_DURATION, 1);
+        setGestureProgress(progress);
+
+        // Trigger action when 3 seconds reached
+        if (elapsed >= GESTURE_DURATION) {
+          if (!videoPlaying) {
+            startVideo();
+          } else {
+            pauseVideo();
+          }
+          setGestureStartTime(null);
+          setGestureProgress(0);
+          gesturePositionRef.current = null;
+        }
+      }
+    } else {
+      // Reset if gesture lost
+      if (gestureStartTime) {
+        setGestureStartTime(null);
+        setGestureProgress(0);
+        gesturePositionRef.current = null;
+      }
+    }
+  }, [handLandmarks, isReady, videoPlaying, gestureStartTime, referenceVideo, gestureControlEnabled]);
+
   // Return all state and functions needed by the View
   return {
     videoRef,
@@ -280,7 +533,14 @@ export const usePoseDetectorController = () => {
     exportLandmarkData,
     toggleDataPanel,
     referenceVideo,
-    handleReferenceVideoSelect
+    handleReferenceVideoSelect,
+    // Gesture and video control
+    gestureProgress,
+    videoPlaying,
+    setVideoPlaying,
+    videoPlayerControlRef,
+    gestureControlEnabled,
+    toggleGestureControl
   };
 };
 

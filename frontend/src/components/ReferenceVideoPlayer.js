@@ -6,7 +6,7 @@ import PoseEstimationService from '../services/PoseEstimationService';
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +25,48 @@ const ReferenceVideoPlayer = ({ onVideoSelect }) => {
   useEffect(() => {
     fetchVideos();
   }, []);
+
+  /**
+   * Expose play control to parent via ref
+   */
+  useEffect(() => {
+    if (videoPlayerControlRef) {
+      videoPlayerControlRef.current = {
+        play: () => {
+          if (videoRef.current) {
+            videoRef.current.play();
+          }
+        },
+        pause: () => {
+          if (videoRef.current) {
+            videoRef.current.pause();
+          }
+        }
+      };
+    }
+  }, [videoPlayerControlRef]);
+
+  /**
+   * Track video play/pause state
+   */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !setVideoPlaying) return;
+
+    const handlePlay = () => setVideoPlaying(true);
+    const handlePause = () => setVideoPlaying(false);
+    const handleEnded = () => setVideoPlaying(false);
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [selectedVideo, setVideoPlaying]);
 
   const fetchVideos = async () => {
     try {
@@ -490,7 +532,6 @@ const ReferenceVideoPlayer = ({ onVideoSelect }) => {
               key={selectedVideo.filename}
               controls
               loop
-              autoPlay
               style={{
                 width: '100%',
                 height: '100%',

@@ -16,7 +16,13 @@ const PoseDetectorView = ({
   exportLandmarkData,
   toggleDataPanel,
   referenceVideo,
-  handleReferenceVideoSelect
+  handleReferenceVideoSelect,
+  gestureProgress,
+  videoPlaying,
+  setVideoPlaying,
+  videoPlayerControlRef,
+  gestureControlEnabled,
+  toggleGestureControl
 }) => {
   return (
     <div style={{ 
@@ -88,7 +94,8 @@ const PoseDetectorView = ({
           margin: '0 auto 20px',
           display: 'flex',
           gap: '10px',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          flexWrap: 'wrap'
         }}>
           <button
             onClick={toggleDataPanel}
@@ -122,6 +129,26 @@ const PoseDetectorView = ({
           >
             💾 Export Data
           </button>
+          {referenceVideo && (
+            <button
+              onClick={toggleGestureControl}
+              style={{
+                padding: '12px 24px',
+                background: gestureControlEnabled
+                  ? 'rgba(76, 175, 80, 0.9)'
+                  : 'rgba(244, 67, 54, 0.9)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {gestureControlEnabled ? '✋ Gesture: ON' : '🚫 Gesture: OFF'}
+            </button>
+          )}
         </div>
       )}
 
@@ -144,7 +171,11 @@ const PoseDetectorView = ({
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
             minHeight: '500px'
           }}>
-            <ReferenceVideoPlayer onVideoSelect={handleReferenceVideoSelect} />
+            <ReferenceVideoPlayer
+              onVideoSelect={handleReferenceVideoSelect}
+              videoPlayerControlRef={videoPlayerControlRef}
+              setVideoPlaying={setVideoPlaying}
+            />
           </div>
         )}
 
@@ -245,6 +276,57 @@ const PoseDetectorView = ({
             padding: '20px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
+        {/* Gesture Progress Indicator */}
+        {isReady && gestureProgress > 0 && referenceVideo && gestureControlEnabled && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '20px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            borderRadius: '12px',
+            color: 'white'
+          }}>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              marginBottom: '12px',
+              textAlign: 'center',
+              color: videoPlaying ? '#ff6b9d' : '#40E0D0'
+            }}>
+              {videoPlaying
+                ? `✊ Hold raised fist to pause... ${Math.ceil((1 - gestureProgress) * 3)}s`
+                : `✋ Hold raised palm to start... ${Math.ceil((1 - gestureProgress) * 3)}s`
+              }
+            </div>
+            <div style={{
+              width: '100%',
+              height: '12px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '6px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${gestureProgress * 100}%`,
+                height: '100%',
+                background: videoPlaying
+                  ? 'linear-gradient(90deg, #ff6b9d 0%, #c44569 100%)'
+                  : 'linear-gradient(90deg, #40E0D0 0%, #1E90FF 100%)',
+                transition: 'width 0.1s ease',
+                boxShadow: videoPlaying
+                  ? '0 0 10px rgba(255, 107, 157, 0.5)'
+                  : '0 0 10px rgba(64, 224, 208, 0.5)'
+              }}></div>
+            </div>
+            <div style={{
+              fontSize: '12px',
+              marginTop: '8px',
+              textAlign: 'center',
+              color: 'rgba(255, 255, 255, 0.7)'
+            }}>
+              Keep your hand raised and still
+            </div>
+          </div>
+        )}
+
         {showData && (
           <div style={{
             padding: '20px',
@@ -401,15 +483,18 @@ const PoseDetectorView = ({
             }}>
               Quick Tips
             </h3>
-            <ul style={{ 
+            <ul style={{
               margin: 0,
               padding: '0 0 0 20px',
               lineHeight: '1.8',
               fontSize: '15px'
             }}>
+              <li><strong>Gesture Control:</strong> Raise your hand <strong>high and hold still</strong> for 3 seconds</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>✋ Open palm</strong> (fingers extended) → <strong>Play</strong> video</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>✊ Closed fist</strong> (fingers curled) → <strong>Pause</strong> video</li>
+              <li><strong>Toggle "Gesture: OFF"</strong> when dancing to avoid accidental triggers</li>
               <li>Click "Show Data" to see real-time position coordinates</li>
               <li>Click "Export Data" to download current positions as JSON</li>
-              <li>Hold your hands in view for detailed tracking</li>
               <li>Stand 3-5 feet back for best full-body tracking</li>
             </ul>
           </div>
