@@ -77,12 +77,14 @@ export const usePoseDetectorController = () => {
   /**
    * Check if hand is raised high (in upper portion of frame)
    * Returns true if wrist is in upper 40% of frame
+   * Works with name-based landmarks
    */
   const isHandRaisedHigh = (landmarks) => {
     if (!landmarks || landmarks.length === 0) return false;
 
-    // Wrist is landmark 0
-    const wrist = landmarks[0];
+    // Find the wrist landmark by name
+    const wrist = landmarks.find(lm => lm.name === 'wrist');
+    if (!wrist) return false;
 
     // Normalized y goes from 0 (top) to 1 (bottom)
     // Check if wrist is in upper 40% of frame (y < 0.4)
@@ -92,13 +94,16 @@ export const usePoseDetectorController = () => {
   /**
    * Check if hand is relatively still
    * Returns true if hand hasn't moved much since gesture started
+   * Works with name-based landmarks
    */
   const isHandStill = (landmarks) => {
     if (!landmarks || landmarks.length === 0) return false;
     if (!gesturePositionRef.current) return true; // First check, consider it still
 
-    // Use wrist position (landmark 0) to check movement
-    const currentWrist = landmarks[0];
+    // Find wrist landmark by name
+    const currentWrist = landmarks.find(lm => lm.name === 'wrist');
+    if (!currentWrist) return false;
+
     const previousWrist = gesturePositionRef.current;
 
     // Calculate distance moved (in normalized coordinates)
@@ -113,22 +118,32 @@ export const usePoseDetectorController = () => {
   /**
    * Detect open palm gesture
    * Returns true if all fingers are extended (fingertips above their base points)
+   * Works with the subset of 11 hand landmarks (tips and bases only)
    */
   const detectOpenPalm = (landmarks) => {
     if (!landmarks || landmarks.length === 0) return false;
 
-    // MediaPipe hands uses 21 landmarks (0-20)
-    // We need at least the fingertips and base points
-    if (landmarks.length < 21) return false;
+    // Create a map for easy lookup by name
+    const landmarkMap = {};
+    landmarks.forEach(lm => {
+      landmarkMap[lm.name] = lm;
+    });
 
-    // Check if fingertips (indices 4, 8, 12, 16, 20) are extended
-    // by comparing their y-coordinates with their base knuckles
+    // Check if we have the required landmarks
+    const requiredLandmarks = ['wrist', 'thumb_cmc', 'thumb_tip', 'index_mcp', 'index_tip',
+                                'middle_mcp', 'middle_tip', 'ring_mcp', 'ring_tip',
+                                'pinky_mcp', 'pinky_tip'];
+
+    const hasAllLandmarks = requiredLandmarks.every(name => landmarkMap[name]);
+    if (!hasAllLandmarks) return false;
+
+    // Check if fingertips are extended by comparing y-coordinates with their base points
     // Lower y value = higher on screen (extended)
-    const thumbExtended = landmarks[4].y < landmarks[2].y - 20; // Thumb tip vs thumb IP
-    const indexExtended = landmarks[8].y < landmarks[6].y;      // Index tip vs index DIP
-    const middleExtended = landmarks[12].y < landmarks[10].y;   // Middle tip vs middle DIP
-    const ringExtended = landmarks[16].y < landmarks[14].y;     // Ring tip vs ring DIP
-    const pinkyExtended = landmarks[20].y < landmarks[18].y;    // Pinky tip vs pinky DIP
+    const thumbExtended = landmarkMap['thumb_tip'].y < landmarkMap['thumb_cmc'].y - 20;
+    const indexExtended = landmarkMap['index_tip'].y < landmarkMap['index_mcp'].y;
+    const middleExtended = landmarkMap['middle_tip'].y < landmarkMap['middle_mcp'].y;
+    const ringExtended = landmarkMap['ring_tip'].y < landmarkMap['ring_mcp'].y;
+    const pinkyExtended = landmarkMap['pinky_tip'].y < landmarkMap['pinky_mcp'].y;
 
     const fingersExtended = [
       thumbExtended,
@@ -146,20 +161,32 @@ export const usePoseDetectorController = () => {
   /**
    * Detect closed fist gesture
    * Returns true if all fingers are curled (fingertips below their base points)
+   * Works with the subset of 11 hand landmarks (tips and bases only)
    */
   const detectClosedFist = (landmarks) => {
     if (!landmarks || landmarks.length === 0) return false;
 
-    // MediaPipe hands uses 21 landmarks (0-20)
-    if (landmarks.length < 21) return false;
+    // Create a map for easy lookup by name
+    const landmarkMap = {};
+    landmarks.forEach(lm => {
+      landmarkMap[lm.name] = lm;
+    });
+
+    // Check if we have the required landmarks
+    const requiredLandmarks = ['wrist', 'thumb_cmc', 'thumb_tip', 'index_mcp', 'index_tip',
+                                'middle_mcp', 'middle_tip', 'ring_mcp', 'ring_tip',
+                                'pinky_mcp', 'pinky_tip'];
+
+    const hasAllLandmarks = requiredLandmarks.every(name => landmarkMap[name]);
+    if (!hasAllLandmarks) return false;
 
     // Check if fingertips are curled (below their base knuckles)
     // Higher y value = lower on screen (curled)
-    const thumbCurled = landmarks[4].y > landmarks[2].y + 10;   // Thumb tip vs thumb IP
-    const indexCurled = landmarks[8].y > landmarks[6].y + 10;   // Index tip vs index DIP
-    const middleCurled = landmarks[12].y > landmarks[10].y + 10; // Middle tip vs middle DIP
-    const ringCurled = landmarks[16].y > landmarks[14].y + 10;   // Ring tip vs ring DIP
-    const pinkyCurled = landmarks[20].y > landmarks[18].y + 10;  // Pinky tip vs pinky DIP
+    const thumbCurled = landmarkMap['thumb_tip'].y > landmarkMap['thumb_cmc'].y + 10;
+    const indexCurled = landmarkMap['index_tip'].y > landmarkMap['index_mcp'].y + 10;
+    const middleCurled = landmarkMap['middle_tip'].y > landmarkMap['middle_mcp'].y + 10;
+    const ringCurled = landmarkMap['ring_tip'].y > landmarkMap['ring_mcp'].y + 10;
+    const pinkyCurled = landmarkMap['pinky_tip'].y > landmarkMap['pinky_mcp'].y + 10;
 
     const fingersCurled = [
       thumbCurled,
@@ -579,11 +606,14 @@ export const usePoseDetectorController = () => {
     if (isGestureDetected && activeHand) {
       if (!gestureStartTime) {
         // Start tracking gesture - record initial position
-        setGestureStartTime(Date.now());
-        gesturePositionRef.current = {
-          normalized_x: activeHand[0].normalized_x,
-          normalized_y: activeHand[0].normalized_y
-        };
+        const wrist = activeHand.find(lm => lm.name === 'wrist');
+        if (wrist) {
+          setGestureStartTime(Date.now());
+          gesturePositionRef.current = {
+            normalized_x: wrist.normalized_x,
+            normalized_y: wrist.normalized_y
+          };
+        }
       } else {
         // Check if hand is still moving too much
         if (!handIsStill) {
