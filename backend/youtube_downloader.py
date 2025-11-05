@@ -41,10 +41,10 @@ class YouTubeDownloader:
         progress_callback=None
     ):
         """
-        Download a YouTube video
+        Download a video from YouTube, YouTube Shorts, TikTok, or 1000+ platforms
 
         Args:
-            url: YouTube video URL
+            url: Video URL (YouTube, YouTube Shorts, TikTok, Instagram, etc.)
             output_filename: Custom filename (without extension) or None for auto
             audio_only: If True, download only audio (m4a format)
             quality: Video quality ('best', '1080p', '720p', '480p')
@@ -61,7 +61,7 @@ class YouTubeDownloader:
             else:
                 outtmpl = str(self.output_dir / "%(title)s-%(id)s.%(ext)s")
 
-            # Base options
+            # Base options with enhanced compatibility
             ydl_opts = {
                 "outtmpl": outtmpl,
                 "progress_hooks": [progress_callback or self._progress_hook],
@@ -69,6 +69,10 @@ class YouTubeDownloader:
                 "quiet": False,
                 "no_warnings": False,
                 "nocheckcertificate": True,  # Fix for SSL certificate issues on macOS
+                # Enhanced options for better platform support
+                "ignoreerrors": False,
+                "geo_bypass": True,  # Bypass geographic restrictions
+                "age_limit": None,  # No age limit restriction
             }
 
             if audio_only:
@@ -123,9 +127,22 @@ class YouTubeDownloader:
                 }
 
         except Exception as e:
+            error_msg = str(e)
+
+            # Provide platform-specific error messages
+            if "tiktok" in url.lower():
+                error_msg = f"TikTok download error: {error_msg}. Note: TikTok downloads may be restricted. Try downloading directly from TikTok or using a TikTok downloader website."
+            elif "instagram" in url.lower():
+                error_msg = f"Instagram download error: {error_msg}. Note: Private or login-required content cannot be downloaded."
+            elif "youtube" in url.lower() or "youtu.be" in url.lower():
+                if "shorts" in url.lower():
+                    error_msg = f"YouTube Shorts download error: {error_msg}. YouTube Shorts are supported - please check the URL."
+                else:
+                    error_msg = f"YouTube download error: {error_msg}"
+
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_msg,
                 "filepath": None,
             }
 
@@ -134,7 +151,7 @@ class YouTubeDownloader:
         Get video information without downloading
 
         Args:
-            url: YouTube video URL
+            url: Video URL (YouTube, YouTube Shorts, TikTok, Instagram, etc.)
 
         Returns:
             dict with video metadata
@@ -144,6 +161,7 @@ class YouTubeDownloader:
                 "quiet": True,
                 "no_warnings": True,
                 "nocheckcertificate": True,  # Fix for SSL certificate issues on macOS
+                "geo_bypass": True,  # Bypass geographic restrictions
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -155,11 +173,25 @@ class YouTubeDownloader:
                     "uploader": info.get("uploader", ""),
                     "views": info.get("view_count", 0),
                     "description": info.get("description", ""),
+                    "platform": info.get("extractor_key", "Unknown"),
                 }
         except Exception as e:
+            error_msg = str(e)
+
+            # Provide platform-specific error messages
+            if "tiktok" in url.lower():
+                error_msg = f"TikTok error: {error_msg}. Note: Some TikTok content may be restricted."
+            elif "instagram" in url.lower():
+                error_msg = f"Instagram error: {error_msg}. Note: Private or login-required content cannot be accessed."
+            elif "youtube" in url.lower() or "youtu.be" in url.lower():
+                if "shorts" in url.lower():
+                    error_msg = f"YouTube Shorts error: {error_msg}."
+                else:
+                    error_msg = f"YouTube error: {error_msg}"
+
             return {
                 "success": False,
-                "error": str(e),
+                "error": error_msg,
             }
 
 

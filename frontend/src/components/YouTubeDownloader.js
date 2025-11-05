@@ -117,7 +117,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         fontSize: '13px',
         color: '#718096'
       }}>
-        Paste a video link from YouTube, Instagram, Twitter/X, or other platforms
+        Paste a video URL from YouTube, YouTube Shorts, TikTok, Instagram, or 1000+ other platforms
       </p>
 
       <div style={{ marginBottom: '16px' }}>
@@ -130,7 +130,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
               handleDownload();
             }
           }}
-          placeholder="Paste video URL (YouTube, Instagram, Twitter/X, etc.)"
+          placeholder="Paste video URL (YouTube, YouTube Shorts, TikTok, Instagram, etc.)"
           style={{
             width: '100%',
             padding: '12px',
@@ -225,12 +225,22 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             gridTemplateColumns: 'auto 1fr',
             gap: '4px 12px'
           }}>
+            {videoInfo.platform && (
+              <>
+                <span style={{ fontWeight: '500' }}>Platform:</span>
+                <span>{videoInfo.platform}</span>
+              </>
+            )}
             <span style={{ fontWeight: '500' }}>Duration:</span>
             <span>{formatDuration(videoInfo.duration)}</span>
             <span style={{ fontWeight: '500' }}>Channel:</span>
             <span>{videoInfo.uploader}</span>
-            <span style={{ fontWeight: '500' }}>Views:</span>
-            <span>{videoInfo.views?.toLocaleString()}</span>
+            {videoInfo.views > 0 && (
+              <>
+                <span style={{ fontWeight: '500' }}>Views:</span>
+                <span>{videoInfo.views?.toLocaleString()}</span>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -275,8 +285,19 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
       }}>
         <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>Supported Platforms:</p>
         <div style={{ marginBottom: '12px', lineHeight: '1.6' }}>
-          <strong>YouTube</strong>, <strong>Instagram</strong> (Reels), <strong>Twitter/X</strong>,
+          <strong>YouTube</strong> (including <strong>Shorts</strong>), <strong>TikTok</strong>*, <strong>Instagram</strong> (Reels), <strong>Twitter/X</strong>,
           <strong> Facebook</strong>, <strong>Vimeo</strong>, <strong>Reddit</strong>, and 1000+ more sites
+        </div>
+        <div style={{
+          fontSize: '11px',
+          color: '#718096',
+          marginBottom: '12px',
+          padding: '8px',
+          background: '#e6f7ff',
+          borderRadius: '4px',
+          border: '1px solid #91d5ff'
+        }}>
+          <strong>YouTube Shorts:</strong> Fully supported! Just paste the Shorts URL directly.
         </div>
         <div style={{
           fontSize: '11px',
@@ -287,8 +308,8 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
           borderRadius: '4px',
           border: '1px solid #ffd666'
         }}>
-          <strong>Note:</strong> TikTok may be restricted. For TikTok videos, try downloading from browser
-          or use a TikTok download website, then upload the file manually.
+          <strong>TikTok Note:</strong> Some TikTok content may be restricted due to platform limitations.
+          If download fails, try using a dedicated TikTok downloader or download from your browser.
         </div>
 
         <p style={{ margin: '12px 0 8px 0', fontWeight: '600' }}>Quick Tips:</p>
