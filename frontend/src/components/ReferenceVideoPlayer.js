@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import YouTubeDownloader from './YouTubeDownloader';
 import PoseEstimationService from '../services/PoseEstimationService';
+import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
 
 /**
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
@@ -316,12 +317,6 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
 
   return (
     <div style={{
-      background: 'rgba(255, 255, 255, 0.95)',
-      borderRadius: '16px',
-      padding: '24px',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-      backdropFilter: 'blur(10px)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
       height: '100%',
       display: 'flex',
       flexDirection: 'column'
@@ -330,13 +325,13 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '16px'
+        marginBottom: '12px'
       }}>
         <h3 style={{
           margin: 0,
           fontSize: '18px',
           fontWeight: '600',
-          color: '#2d3748'
+          color: 'white'
         }}>
           Reference Video
         </h3>
@@ -344,15 +339,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           <button
             onClick={() => setShowDownloader(!showDownloader)}
             style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              background: showDownloader ? '#38a169' : '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: '500',
-              transition: 'background 0.2s'
+              ...headerButtonStyle,
+              background: getHeaderButtonBackground(showDownloader)
             }}
           >
             {showDownloader ? 'Hide Downloader' : 'Download Video'}
@@ -360,14 +348,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           <button
             onClick={fetchVideos}
             style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: '500'
+              ...headerButtonStyle,
+              background: '#667eea'
             }}
           >
             Refresh
@@ -383,116 +365,152 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       )}
 
       {loading && (
-        <p style={{ color: '#718096', fontSize: '14px' }}>Loading videos...</p>
+        <p style={{ color: 'white', fontSize: '14px' }}>Loading videos...</p>
       )}
 
       {error && (
-        <p style={{ color: '#e53e3e', fontSize: '14px' }}>{error}</p>
+        <p style={{ color: '#ff6b9d', fontSize: '14px' }}>{error}</p>
       )}
 
       {!loading && !error && videos.length === 0 && !showDownloader && (
         <div style={{
-          padding: '24px',
-          textAlign: 'center',
-          color: '#718096',
-          fontSize: '14px'
+          position: 'relative',
+          width: '100%',
+          paddingBottom: '75%', // 4:3 aspect ratio (480/640 = 0.75)
+          borderRadius: '16px',
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)'
         }}>
           <div style={{
-            fontSize: '48px',
-            marginBottom: '16px'
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            textAlign: 'center',
+            color: 'rgba(255, 255, 255, 0.9)',
+            fontSize: '14px'
           }}>
-            🎥
-          </div>
-          <p style={{
-            fontSize: '16px',
-            fontWeight: '600',
-            color: '#2d3748',
-            margin: '0 0 8px 0'
-          }}>
-            No videos yet!
-          </p>
-          <p style={{ margin: '0 0 16px 0' }}>
-            Download a YouTube dance video to get started
-          </p>
-          <button
-            onClick={() => setShowDownloader(true)}
-            style={{
-              padding: '12px 24px',
-              fontSize: '14px',
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '16px'
+            }}>
+              🎥
+            </div>
+            <p style={{
+              fontSize: '16px',
               fontWeight: '600',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#5568d3';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#667eea';
-            }}
-          >
-            Download Your First Video
-          </button>
+              color: 'white',
+              margin: '0 0 8px 0'
+            }}>
+              No videos yet!
+            </p>
+            <p style={{ margin: '0 0 16px 0', color: 'rgba(255, 255, 255, 0.9)' }}>
+              Download a YouTube dance video to get started
+            </p>
+            <button
+              onClick={() => setShowDownloader(true)}
+              style={{
+                padding: '12px 24px',
+                fontSize: '14px',
+                background: '#667eea',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#5568d3';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#667eea';
+              }}
+            >
+              Download Your First Video
+            </button>
+          </div>
         </div>
       )}
 
       {!selectedVideo && videos.length > 0 && !showDownloader && (
         <div style={{
-          maxHeight: '400px',
-          overflowY: 'auto',
-          marginTop: '8px'
+          position: 'relative',
+          width: '100%',
+          paddingBottom: '75%', // 4:3 aspect ratio (480/640 = 0.75)
+          borderRadius: '16px',
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)'
         }}>
-          {videos.map((video, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleVideoSelect(video)}
-              style={{
-                padding: '12px',
-                marginBottom: '8px',
-                background: '#f7fafc',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                border: '1px solid #e2e8f0'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#edf2f7';
-                e.currentTarget.style.transform = 'translateX(4px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#f7fafc';
-                e.currentTarget.style.transform = 'translateX(0)';
-              }}
-            >
-              <div style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#2d3748',
-                marginBottom: '4px',
-                wordBreak: 'break-word'
-              }}>
-                {video.filename}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '16px'
+          }}>
+            {videos.map((video, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleVideoSelect(video)}
+                style={{
+                  padding: '12px',
+                  marginBottom: idx === videos.length - 1 ? '0' : '12px',
+                  background: 'rgba(255, 255, 255, 0.9)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid rgba(255, 255, 255, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#2d3748',
+                  marginBottom: '4px',
+                  wordBreak: 'break-word'
+                }}>
+                  {video.filename}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#718096'
+                }}>
+                  {formatFileSize(video.size)}
+                </div>
               </div>
-              <div style={{
-                fontSize: '12px',
-                color: '#718096'
-              }}>
-                {formatFileSize(video.size)}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
       {selectedVideo && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{
             marginBottom: '12px',
             padding: '8px 12px',
-            background: '#f7fafc',
+            background: 'rgba(255, 255, 255, 0.9)',
             borderRadius: '6px',
             fontSize: '13px',
             color: '#2d3748',
@@ -521,11 +539,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           </div>
 
           <div style={{
-            flex: 1,
             position: 'relative',
-            background: '#000',
-            borderRadius: '8px',
-            overflow: 'hidden'
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
           }}>
             <video
               ref={videoRef}
@@ -533,10 +550,9 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
               controls
               loop
               style={{
+                display: 'block',
                 width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                display: 'block'
+                height: 'auto'
               }}
               src={`http://localhost:8000/video/${selectedVideo.filename}`}
               crossOrigin="anonymous"
@@ -548,8 +564,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: '100%',
-                objectFit: 'contain',
+                height: 'auto',
                 pointerEvents: 'none'
               }}
             />

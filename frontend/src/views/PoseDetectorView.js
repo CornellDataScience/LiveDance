@@ -1,5 +1,6 @@
 import React from 'react';
 import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
+import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
 
 /**
  * View: Pure UI component for pose detection display
@@ -26,7 +27,11 @@ const PoseDetectorView = ({
   videoPlayerControlRef,
   gestureControlEnabled,
   toggleGestureControl,
-  toggle2D3D
+  toggle2D3D,
+  cameraEnabled,
+  toggleCamera,
+  showPerformanceMonitor,
+  togglePerformanceMonitor
 }) => {
   return (
     <div style={{ 
@@ -55,202 +60,262 @@ const PoseDetectorView = ({
         </p>
       </div>
 
-      {/* Performance Overlay */}
+      {/* Performance Monitor */}
       {isReady && (
         <div style={{
           position: 'fixed',
           top: '20px',
           right: '20px',
-          padding: '16px',
-          background: 'rgba(0, 0, 0, 0.85)',
-          borderRadius: '12px',
-          color: 'white',
-          fontSize: '13px',
-          fontFamily: 'monospace',
-          minWidth: '280px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-          zIndex: 1000
+          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          zIndex: 1000,
+          overflow: 'hidden',
+          transition: 'all 0.3s ease'
         }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '15px', color: '#00ff00' }}>
-            ⚡ Performance Monitor
-          </div>
-          
-          <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span>Mode:</span>
-              <span style={{ color: '#ff9f40', fontWeight: 'bold' }}>{performanceMetrics.mode || '3D'}</span>
+          {/* Header */}
+          <div 
+            onClick={togglePerformanceMonitor}
+            style={{
+              padding: '12px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+              background: 'rgba(0, 0, 0, 0.15)',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(0, 0, 0, 0.25)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(0, 0, 0, 0.15)';
+            }}
+          >
+            <div style={{ 
+              fontWeight: '600', 
+              fontSize: '14px', 
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              Performance
+            </div>
+            <div style={{ 
+              color: 'white', 
+              fontSize: '16px',
+              transition: 'transform 0.3s ease',
+              transform: showPerformanceMonitor ? 'rotate(180deg)' : 'rotate(0deg)',
+              marginLeft: '16px'
+            }}>
+              ▼
             </div>
           </div>
-          
-          <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span>FPS:</span>
-              <span style={{ color: '#0f0', fontWeight: 'bold' }}>{performanceMetrics.fps}</span>
+
+          {/* Content */}
+          {showPerformanceMonitor && (
+            <div style={{
+              padding: '16px',
+              color: 'white',
+              fontSize: '13px',
+              minWidth: '280px'
+            }}>
+              <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Mode:</span>
+                  <span style={{ color: '#ffd700', fontWeight: '600' }}>{performanceMetrics.mode || '3D'}</span>
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>FPS:</span>
+                  <span style={{ color: '#40E0D0', fontWeight: '600' }}>{performanceMetrics.fps}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Total Latency:</span>
+                  <span style={{ color: '#ff6b9d', fontWeight: '600' }}>{performanceMetrics.totalLatency}ms</span>
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
+                Frontend:
+              </div>
+              <div style={{ paddingLeft: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Image Capture:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.frontendTime}ms</span>
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
+                Network:
+              </div>
+              <div style={{ paddingLeft: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>WebSocket:</span>
+                  <span style={{ color: '#c77dff' }}>{performanceMetrics.networkLatency}ms</span>
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
+                Backend ({performanceMetrics.backendTime}ms):
+              </div>
+              <div style={{ paddingLeft: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Decode:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.decode}ms</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Downscale:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.downscale}ms</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Pose:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.pose}ms</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• 3D Angles:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Hands:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Smoothing:</span>
+                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.smoothing}ms</span>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Total Latency:</span>
-              <span style={{ color: '#ff0', fontWeight: 'bold' }}>{performanceMetrics.totalLatency}ms</span>
-            </div>
-          </div>
-          
-          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Frontend:</div>
-          <div style={{ paddingLeft: '10px', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-              <span>Image Capture:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.frontendTime}ms</span>
-            </div>
-          </div>
-          
-          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Network (WebSocket):</div>
-          <div style={{ paddingLeft: '10px', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-              <span>Latency:</span>
-              <span style={{ color: '#f0f' }}>{performanceMetrics.networkLatency}ms</span>
-            </div>
-          </div>
-          
-          <div style={{ fontSize: '12px', marginBottom: '8px', color: '#aaa' }}>Backend ({performanceMetrics.backendTime}ms):</div>
-          <div style={{ paddingLeft: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
-              <span>• Decode:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.decode}ms</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
-              <span>• Downscale:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.downscale}ms</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
-              <span>• Pose:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.pose}ms</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
-              <span>• 3D Angles:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '2px' }}>
-              <span>• Hands:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-              <span>• Smoothing:</span>
-              <span style={{ color: '#0af' }}>{performanceMetrics.backendBreakdown.smoothing}ms</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
-
-      {/* Status Bar */}
-      <div style={{
-        maxWidth: '680px',
-        margin: '0 auto 20px',
-        padding: '16px 24px',
-        background: isReady 
-          ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
-          : 'rgba(255, 255, 255, 0.2)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '12px',
-        textAlign: 'center',
-        transition: 'all 0.3s ease'
-      }}>
-        <div style={{
-          color: 'white',
-          fontSize: '16px',
-          fontWeight: '600',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px'
-        }}>
-          {!isReady && (
-            <div style={{
-              width: '20px',
-              height: '20px',
-              border: '3px solid rgba(255,255,255,0.3)',
-              borderTop: '3px solid white',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}></div>
-          )}
-          {status}
-        </div>
-      </div>
 
       {/* Control Buttons */}
       {isReady && (
         <div style={{
-          maxWidth: '680px',
-          margin: '0 auto 20px',
+          maxWidth: '720px',
+          margin: '0 auto 30px',
           display: 'flex',
-          gap: '10px',
+          gap: '12px',
           justifyContent: 'center',
           flexWrap: 'wrap'
         }}>
           <button
             onClick={toggleDataPanel}
             style={{
-              padding: '12px 24px',
-              background: showData ? 'rgba(255, 107, 157, 0.9)' : 'rgba(255, 255, 255, 0.2)',
+              padding: '14px 28px',
+              background: showData ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
               color: 'white',
-              border: 'none',
-              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
               cursor: 'pointer',
               fontWeight: '600',
               fontSize: '14px',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = showData ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
           >
-            {showData ? '📊 Hide Data' : '📊 Show Data'}
+            {showData ? 'Hide Data' : 'Show Data'}
           </button>
           <button
             onClick={exportLandmarkData}
             style={{
-              padding: '12px 24px',
-              background: 'rgba(64, 224, 208, 0.9)',
+              padding: '14px 28px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
               color: 'white',
-              border: 'none',
-              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
               cursor: 'pointer',
               fontWeight: '600',
               fontSize: '14px',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
           >
-            💾 Export Data
+            Export Data
           </button>
           <button
             onClick={toggle2D3D}
             style={{
-              padding: '12px 24px',
-              background: 'rgba(255, 159, 64, 0.9)',
+              padding: '14px 28px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
               color: 'white',
-              border: 'none',
-              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
               cursor: 'pointer',
               fontWeight: '600',
               fontSize: '14px',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
           >
-            🔄 Toggle 2D/3D
+            Toggle 2D/3D
           </button>
           {referenceVideo && (
             <button
               onClick={toggleGestureControl}
               style={{
-                padding: '12px 24px',
-                background: gestureControlEnabled
-                  ? 'rgba(76, 175, 80, 0.9)'
-                  : 'rgba(244, 67, 54, 0.9)',
+                padding: '14px 28px',
+                background: gestureControlEnabled ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
                 color: 'white',
-                border: 'none',
-                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: '12px',
                 cursor: 'pointer',
                 fontWeight: '600',
                 fontSize: '14px',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = gestureControlEnabled ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
               }}
             >
-              {gestureControlEnabled ? '✋ Gesture: ON' : '🚫 Gesture: OFF'}
+              {gestureControlEnabled ? 'Gesture: ON' : 'Gesture: OFF'}
             </button>
           )}
         </div>
@@ -261,35 +326,34 @@ const PoseDetectorView = ({
         maxWidth: '1400px',
         margin: '0 auto',
         display: 'grid',
-        gridTemplateColumns: referenceVideo ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr',
-        gap: '20px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gap: '24px',
         alignItems: 'start'
       }}>
         {/* Reference Video Player */}
-        {referenceVideo && (
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '20px',
-            padding: '20px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-            minHeight: '500px'
-          }}>
-            <ReferenceVideoPlayer
-              onVideoSelect={handleReferenceVideoSelect}
-              videoPlayerControlRef={videoPlayerControlRef}
-              setVideoPlaying={setVideoPlaying}
-            />
-          </div>
-        )}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '20px',
+          padding: '24px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
+        }}>
+          <ReferenceVideoPlayer
+            onVideoSelect={handleReferenceVideoSelect}
+            videoPlayerControlRef={videoPlayerControlRef}
+            setVideoPlaying={setVideoPlaying}
+          />
+        </div>
 
         {/* Camera Feed & Skeleton */}
         <div style={{
           background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(10px)',
           borderRadius: '20px',
-          padding: '20px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+          padding: '24px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
         }}>
           <div style={{
             display: 'flex',
@@ -305,30 +369,15 @@ const PoseDetectorView = ({
             }}>
               Your Camera
             </h3>
-            {!referenceVideo && (
-              <button
-                onClick={() => handleReferenceVideoSelect({})}
-                style={{
-                  padding: '8px 16px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '500',
-                  fontSize: '14px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                }}
-              >
-                + Add Reference Video
-              </button>
-            )}
+            <button
+              onClick={toggleCamera}
+              style={{
+                ...headerButtonStyle,
+                background: getHeaderButtonBackground(cameraEnabled)
+              }}
+            >
+              {cameraEnabled ? 'Camera: On' : 'Camera: Off'}
+            </button>
           </div>
 
           <div style={{
@@ -337,32 +386,76 @@ const PoseDetectorView = ({
             overflow: 'hidden',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
           }}>
-            <video
-              ref={videoRef}
-              width="640"
-              height="480"
-              autoPlay
-              playsInline
-              style={{
-                transform: 'scaleX(-1)',
-                display: 'block',
+            {cameraEnabled ? (
+              <>
+                <video
+                  ref={videoRef}
+                  width="640"
+                  height="480"
+                  autoPlay
+                  playsInline
+                  style={{
+                    transform: 'scaleX(-1)',
+                    display: 'block',
+                    width: '100%',
+                    height: 'auto'
+                  }}
+                />
+                <canvas
+                  ref={canvasRef}
+                  width="640"
+                  height="480"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    transform: 'scaleX(-1)',
+                    width: '100%',
+                    height: 'auto'
+                  }}
+                />
+              </>
+            ) : (
+              <div style={{
+                position: 'relative',
                 width: '100%',
-                height: 'auto'
-              }}
-            />
-            <canvas
-              ref={canvasRef}
-              width="640"
-              height="480"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                transform: 'scaleX(-1)',
-                width: '100%',
-                height: 'auto'
-              }}
-            />
+                paddingBottom: '75%', // 4:3 aspect ratio (480/640 = 0.75)
+                background: 'rgba(0, 0, 0, 0.8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  textAlign: 'center',
+                  color: 'rgba(255, 255, 255, 0.7)'
+                }}>
+                  <div style={{
+                    fontSize: '48px',
+                    marginBottom: '16px',
+                    opacity: 0.5
+                  }}>
+                    📷
+                  </div>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: '600'
+                  }}>
+                    Camera Off
+                  </div>
+                  <div style={{
+                    fontSize: '14px',
+                    marginTop: '8px',
+                    opacity: 0.8
+                  }}>
+                    Click "Camera: Off" to turn on
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -377,54 +470,53 @@ const PoseDetectorView = ({
             background: 'rgba(255, 255, 255, 0.1)',
             backdropFilter: 'blur(10px)',
             borderRadius: '20px',
-            padding: '20px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            padding: '24px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
           }}>
         {/* Gesture Progress Indicator */}
         {isReady && gestureProgress > 0 && referenceVideo && gestureControlEnabled && (
           <div style={{
-            marginBottom: '20px',
-            padding: '20px',
-            background: 'rgba(0, 0, 0, 0.8)',
-            borderRadius: '12px',
-            color: 'white'
+            marginBottom: '24px',
+            padding: '24px',
+            background: 'rgba(255, 255, 255, 0.15)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '16px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
           }}>
             <div style={{
-              fontSize: '16px',
+              fontSize: '15px',
               fontWeight: '600',
-              marginBottom: '12px',
+              marginBottom: '16px',
               textAlign: 'center',
-              color: videoPlaying ? '#ff6b9d' : '#40E0D0'
+              color: 'white'
             }}>
               {videoPlaying
-                ? `✊ Hold raised fist to pause... ${Math.ceil((1 - gestureProgress) * 3)}s`
-                : `✋ Hold raised palm to start... ${Math.ceil((1 - gestureProgress) * 3)}s`
+                ? `Hold raised fist to pause... ${Math.ceil((1 - gestureProgress) * 3)}s`
+                : `Hold raised palm to start... ${Math.ceil((1 - gestureProgress) * 3)}s`
               }
             </div>
             <div style={{
               width: '100%',
-              height: '12px',
+              height: '8px',
               background: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '6px',
+              borderRadius: '8px',
               overflow: 'hidden'
             }}>
               <div style={{
                 width: `${gestureProgress * 100}%`,
                 height: '100%',
-                background: videoPlaying
-                  ? 'linear-gradient(90deg, #ff6b9d 0%, #c44569 100%)'
-                  : 'linear-gradient(90deg, #40E0D0 0%, #1E90FF 100%)',
+                background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)',
                 transition: 'width 0.1s ease',
-                boxShadow: videoPlaying
-                  ? '0 0 10px rgba(255, 107, 157, 0.5)'
-                  : '0 0 10px rgba(64, 224, 208, 0.5)'
+                borderRadius: '8px'
               }}></div>
             </div>
             <div style={{
-              fontSize: '12px',
-              marginTop: '8px',
+              fontSize: '13px',
+              marginTop: '12px',
               textAlign: 'center',
-              color: 'rgba(255, 255, 255, 0.7)'
+              color: 'rgba(255, 255, 255, 0.8)'
             }}>
               Keep your hand raised and still
             </div>
@@ -433,11 +525,13 @@ const PoseDetectorView = ({
 
         {showData && (
           <div style={{
-            padding: '20px',
-            background: 'rgba(0, 0, 0, 0.6)',
-            borderRadius: '12px',
+            padding: '24px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '16px',
             color: 'white',
-            maxHeight: '400px',
+            maxHeight: '500px',
             overflowY: 'auto'
           }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#ff6b9d' }}>
@@ -621,9 +715,11 @@ const PoseDetectorView = ({
         {/* Info Panel */}
         {!showData && (
           <div style={{
-            padding: '20px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '12px',
+            padding: '24px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '16px',
             color: 'white'
           }}>
             <h3 style={{ 
@@ -683,9 +779,9 @@ const PoseDetectorView = ({
               fontSize: '15px'
             }}>
               <li><strong>Gesture Control:</strong> Raise your hand <strong>high and hold still</strong> for 3 seconds</li>
-              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>✋ Open palm</strong> (fingers extended) → <strong>Play</strong> video</li>
-              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>✊ Closed fist</strong> (fingers curled) → <strong>Pause</strong> video</li>
-              <li><strong>Toggle "Gesture: OFF"</strong> when dancing to avoid accidental triggers</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Open palm</strong> (fingers extended) → <strong>Play</strong> video</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Closed fist</strong> (fingers curled) → <strong>Pause</strong> video</li>
+              <li><strong>Toggle "Gesture: Off"</strong> when dancing to avoid accidental triggers</li>
               <li>Click "Show Data" to see real-time position coordinates</li>
               <li>Click "Export Data" to download current positions as JSON</li>
               <li>Stand 3-5 feet back for best full-body tracking</li>
