@@ -50,6 +50,9 @@ export const usePoseDetectorController = () => {
   const [pose3DCoords, setPose3DCoords] = useState({});
   const [showData, setShowData] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState(null);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
+  const streamRef = useRef(null);
 
   // Gesture detection state
   const [gestureStartTime, setGestureStartTime] = useState(null);
@@ -233,6 +236,8 @@ export const usePoseDetectorController = () => {
         video: { width: 640, height: 480 }
       });
       
+      streamRef.current = stream;
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setStatus('Camera ready');
@@ -244,6 +249,51 @@ export const usePoseDetectorController = () => {
       console.error(error);
       return false;
     }
+  };
+
+  /**
+   * Toggle camera on/off
+   */
+  const toggleCamera = () => {
+    if (cameraEnabled) {
+      // Turn off camera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      // Clear landmark data
+      setBodyLandmarks([]);
+      setHandLandmarks({ left: [], right: [] });
+      setPose3DAngles({});
+      setPose3DCoords({});
+      setCameraEnabled(false);
+      setStatus('Camera off');
+    } else {
+      // Turn on camera - set enabled first so video element gets rendered
+      setCameraEnabled(true);
+      setStatus('Turning camera on...');
+      // Wait for next tick to ensure video element is in DOM
+      setTimeout(() => {
+        setupCamera().then(success => {
+          if (success) {
+            setStatus('Camera on');
+          } else {
+            setCameraEnabled(false);
+            setStatus('Failed to start camera');
+          }
+        });
+      }, 100);
+    }
+  };
+
+  /**
+   * Toggle performance monitor visibility
+   */
+  const togglePerformanceMonitor = () => {
+    setShowPerformanceMonitor(!showPerformanceMonitor);
   };
 
   /**
@@ -430,6 +480,17 @@ export const usePoseDetectorController = () => {
    */
   const detectPose = async () => {
     if (!videoRef.current || videoRef.current.readyState !== 4 || !canvasRef.current) {
+      animationRef.current = requestAnimationFrame(detectPose);
+      return;
+    }
+
+    // Skip pose detection if camera is disabled
+    if (!cameraEnabled) {
+      // Clear canvas when camera is off
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
       animationRef.current = requestAnimationFrame(detectPose);
       return;
     }
@@ -676,6 +737,12 @@ export const usePoseDetectorController = () => {
     gestureControlEnabled,
     toggleGestureControl,
     // 2D/3D toggle
-    toggle2D3D
+    toggle2D3D,
+    // Camera control
+    cameraEnabled,
+    toggleCamera,
+    // Performance monitor
+    showPerformanceMonitor,
+    togglePerformanceMonitor
   };
 };
