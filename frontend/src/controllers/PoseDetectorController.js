@@ -51,7 +51,8 @@ export const usePoseDetectorController = () => {
   const [showData, setShowData] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
+  const [isPerformanceMonitorMinimized, setIsPerformanceMonitorMinimized] = useState(false);
+  const [audioBeat, setAudioBeat] = useState(false);
   const streamRef = useRef(null);
 
   // Gesture detection state
@@ -294,6 +295,14 @@ export const usePoseDetectorController = () => {
    */
   const togglePerformanceMonitor = () => {
     setShowPerformanceMonitor(!showPerformanceMonitor);
+  };
+
+  const togglePerformanceMonitorSize = () => {
+    setIsPerformanceMonitorMinimized(prev => !prev);
+  };
+
+  const handleAudioBeat = (beat) => {
+    setAudioBeat(beat);
   };
 
   /**
@@ -742,6 +751,8 @@ export const usePoseDetectorController = () => {
     toggleCamera,
     // Performance monitor
     showPerformanceMonitor,
-    togglePerformanceMonitor
+    togglePerformanceMonitorSize,
+    audioBeat,
+    handleAudioBeat,
   };
 };

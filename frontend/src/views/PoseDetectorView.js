@@ -1,6 +1,40 @@
 import React from 'react';
 import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
+import NeuroShaderCanvas from '../components/NeuroShaderCanvas';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
+
+const styles = {
+  mainContainer: {
+    minHeight: '100vh',
+    color: 'rgba(255, 255, 255, 0.9)',
+    padding: '40px 20px',
+    fontFamily: "'Poppins', sans-serif",
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  content: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  header: {
+    textAlign: 'center',
+    marginBottom: '40px',
+  },
+  title: {
+    color: '#ffffff',
+    fontSize: '52px',
+    fontWeight: '700',
+    margin: '0 0 10px 0',
+    letterSpacing: '1px',
+    textShadow: '0 0 15px rgba(0, 170, 255, 0.5)',
+  },
+  subtitle: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: '20px',
+    margin: 0,
+    fontWeight: 300,
+  },
+};
 
 /**
  * View: Pure UI component for pose detection display
@@ -31,35 +65,19 @@ const PoseDetectorView = ({
   cameraEnabled,
   toggleCamera,
   showPerformanceMonitor,
-  togglePerformanceMonitor
+  togglePerformanceMonitor,
+  audioBeat,
+  handleAudioBeat
 }) => {
-  return (
-    <div style={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '40px 20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1 style={{ 
-          color: 'white',
-          fontSize: '42px',
-          fontWeight: '700',
-          margin: '0 0 10px 0',
-          letterSpacing: '-1px'
-        }}>
-          LiveDance
-        </h1>
-        <p style={{ 
-          color: 'rgba(255, 255, 255, 0.9)',
-          fontSize: '18px',
-          margin: 0
-        }}>
-          Full body tracking with real-time feedback
-        </p>
-      </div>
-
+    return (
+      <div style={styles.mainContainer}>
+        <NeuroShaderCanvas audioBeat={audioBeat} />
+        <div style={styles.content}>
+          {/* Header */}
+          <div style={styles.header}>
+            <h1 style={styles.title}>LiveDance</h1>
+            <p style={styles.subtitle}>Real-time Motion Capture & Analysis</p>
+          </div>
       {/* Performance Monitor */}
       {isReady && (
         <div style={{
@@ -343,6 +361,7 @@ const PoseDetectorView = ({
             onVideoSelect={handleReferenceVideoSelect}
             videoPlayerControlRef={videoPlayerControlRef}
             setVideoPlaying={setVideoPlaying}
+            onBeat={handleAudioBeat}
           />
         </div>
 
@@ -792,6 +811,7 @@ const PoseDetectorView = ({
         </div>
       )}
 
+      </div>
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
