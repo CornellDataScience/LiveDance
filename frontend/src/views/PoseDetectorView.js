@@ -84,7 +84,7 @@ const PoseDetectorView = ({
           
           <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span>FPS:</span>
+              <span>Camera FPS:</span>
               <span style={{ color: '#0f0', fontWeight: 'bold' }}>{performanceMetrics.fps}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -466,12 +466,13 @@ const PoseDetectorView = ({
               ))}
             </div>
 
-            <h3 style={{ margin: '20px 0 15px 0', color: '#40E0D0' }}>
+            {/* HAND TRACKING DISABLED */}
+            {/* <h3 style={{ margin: '20px 0 15px 0', color: '#40E0D0' }}>
               Hand Landmarks
-            </h3>
+            </h3> */}
             
             {/* Left Hand */}
-            {handLandmarks.left && handLandmarks.left.length > 0 && (
+            {/* {handLandmarks.left && handLandmarks.left.length > 0 && (
               <>
                 <h4 style={{ margin: '10px 0', color: '#40E0D0' }}>
                   Left Hand ({handLandmarks.left.length} points)
@@ -499,10 +500,10 @@ const PoseDetectorView = ({
                   ))}
                 </div>
               </>
-            )}
+            )} */}
 
             {/* Right Hand */}
-            {handLandmarks.right && handLandmarks.right.length > 0 && (
+            {/* {handLandmarks.right && handLandmarks.right.length > 0 && (
               <>
                 <h4 style={{ margin: '10px 0', color: '#40E0D0' }}>
                   Right Hand ({handLandmarks.right.length} points)
@@ -529,14 +530,14 @@ const PoseDetectorView = ({
                   ))}
                 </div>
               </>
-            )}
+            )} */}
 
-            {(!handLandmarks.left || handLandmarks.left.length === 0) && 
+            {/* {(!handLandmarks.left || handLandmarks.left.length === 0) && 
              (!handLandmarks.right || handLandmarks.right.length === 0) && (
               <p style={{ opacity: 0.7, fontSize: '14px' }}>
                 No hands detected. Hold hands in front of camera.
               </p>
-            )}
+            )} */}
 
             {/* 3D Pose Angles */}
             {Object.keys(pose3DAngles).length > 0 && (

@@ -13,17 +13,56 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   const [error, setError] = useState(null);
   const [showDownloader, setShowDownloader] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [referenceFps, setReferenceFps] = useState(0);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const poseService = useRef(new PoseEstimationService());
   const animationRef = useRef(null);
+  const socketRef = useRef(null);
+  const fpsCounterRef = useRef({ count: 0, lastTime: Date.now() });
+  const lastSendTimeRef = useRef(0);
 
   /**
    * Fetch available videos from backend
    */
   useEffect(() => {
     fetchVideos();
+  }, []);
+
+  /**
+   * Setup WebSocket connection for reference video pose estimation
+   */
+  useEffect(() => {
+    // Get socket from PoseEstimationService
+    socketRef.current = poseService.current.socket;
+
+    // If not connected yet, connect
+    if (!socketRef.current) {
+      poseService.current.connect().then(() => {
+        socketRef.current = poseService.current.socket;
+
+        // Listen for reference pose results
+        socketRef.current.on('reference_pose_result', (data) => {
+          // Draw skeleton with received pose data
+          drawSkeleton(data);
+        });
+      }).catch(err => {
+        console.error('Failed to connect to WebSocket:', err);
+      });
+    } else {
+      // Already connected, just add listener
+      socketRef.current.on('reference_pose_result', (data) => {
+        drawSkeleton(data);
+      });
+    }
+
+    // Cleanup listener on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('reference_pose_result');
+      }
+    };
   }, []);
 
   /**
@@ -126,6 +165,17 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   const drawSkeleton = (poses) => {
     if (!canvasRef.current || !videoRef.current) return;
 
+    // Track rendering FPS
+    fpsCounterRef.current.count++;
+    const now = Date.now();
+    const elapsed = now - fpsCounterRef.current.lastTime;
+
+    if (elapsed >= 1000) {
+      setReferenceFps(fpsCounterRef.current.count);
+      fpsCounterRef.current.count = 0;
+      fpsCounterRef.current.lastTime = now;
+    }
+
     const ctx = canvasRef.current.getContext('2d');
     const video = videoRef.current;
 
@@ -178,96 +228,103 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       }
     });
 
-    // Draw hands
-    const drawHand = (landmarks) => {
-      if (!landmarks || landmarks.length === 0) return;
+    // HAND TRACKING DISABLED
+    // // Draw hands
+    // const drawHand = (landmarks) => {
+    //   if (!landmarks || landmarks.length === 0) return;
 
-      const handConnections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
-        [0, 5], [5, 6], [6, 7], [7, 8],       // Index
-        [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
-        [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-        [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-        [5, 9], [9, 13], [13, 17]             // Palm
-      ];
+    //   const handConnections = [
+    //     [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
+    //     [0, 5], [5, 6], [6, 7], [7, 8],       // Index
+    //     [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
+    //     [0, 13], [13, 14], [14, 15], [15, 16], // Ring
+    //     [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+    //     [5, 9], [9, 13], [13, 17]             // Palm
+    //   ];
 
-      ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
-      ctx.lineWidth = 3;
+    //   ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
+    //   ctx.lineWidth = 3;
 
-      handConnections.forEach(([i, j]) => {
-        const point1 = landmarks[i];
-        const point2 = landmarks[j];
+    //   handConnections.forEach(([i, j]) => {
+    //     const point1 = landmarks[i];
+    //     const point2 = landmarks[j];
 
-        if (point1 && point2) {
-          ctx.beginPath();
-          ctx.moveTo(point1.x, point1.y);
-          ctx.lineTo(point2.x, point2.y);
-          ctx.stroke();
-        }
-      });
+    //     if (point1 && point2) {
+    //       ctx.beginPath();
+    //       ctx.moveTo(point1.x, point1.y);
+    //       ctx.lineTo(point2.x, point2.y);
+    //       ctx.stroke();
+    //     }
+    //   });
 
-      landmarks.forEach((landmark) => {
-        const gradient = ctx.createRadialGradient(
-          landmark.x, landmark.y, 0,
-          landmark.x, landmark.y, 8
-        );
-        gradient.addColorStop(0, '#40E0D0');
-        gradient.addColorStop(1, '#1E90FF');
+    //   landmarks.forEach((landmark) => {
+    //     const gradient = ctx.createRadialGradient(
+    //       landmark.x, landmark.y, 0,
+    //       landmark.x, landmark.y, 8
+    //     );
+    //     gradient.addColorStop(0, '#40E0D0');
+    //     gradient.addColorStop(1, '#1E90FF');
 
-        ctx.beginPath();
-        ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-      });
-    };
+    //     ctx.beginPath();
+    //     ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
+    //     ctx.fillStyle = gradient;
+    //     ctx.fill();
+    //   });
+    // };
 
-    if (poses.hands) {
-      drawHand(poses.hands.left);
-      drawHand(poses.hands.right);
-    }
+    // if (poses.hands) {
+    //   drawHand(poses.hands.left);
+    //   drawHand(poses.hands.right);
+    // }
   };
 
   /**
    * Main detection loop for reference video
-   * Uses SEPARATE endpoint from camera feed
+   * Throttled to 60 FPS for optimal performance
    */
-  const detectPose = async () => {
+  const detectPose = () => {
     if (!videoRef.current || videoRef.current.readyState !== 4 || !canvasRef.current) {
       animationRef.current = requestAnimationFrame(detectPose);
       return;
     }
 
+    const now = performance.now();
+    const TARGET_FPS = 60;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS; // 16.67ms
+
     // Only process if video is playing
-    if (!videoRef.current.paused && !videoRef.current.ended) {
-      try {
-        // Convert video frame to blob
-        const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(videoRef.current, 0, 0);
+    if (!videoRef.current.paused && !videoRef.current.ended && socketRef.current) {
+      // Throttle to 60 FPS
+      if (now - lastSendTimeRef.current >= FRAME_INTERVAL) {
+        lastSendTimeRef.current = now;
 
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+        try {
+          // Convert video frame to base64
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(videoRef.current, 0, 0);
 
-        // Send to REFERENCE-SPECIFIC backend endpoint
-        const formData = new FormData();
-        formData.append('frame', blob);
+          // Convert to base64
+          const imageData = canvas.toDataURL('image/jpeg', 0.8);
+          const base64Data = imageData.split(',')[1];
 
-        const response = await fetch('http://localhost:8000/estimate_pose_reference', {
-          method: 'POST',
-          body: formData
-        });
+          // Send via WebSocket (fire-and-forget, non-blocking!)
+          socketRef.current.emit('reference_frame', {
+            image: base64Data,
+            width: videoRef.current.videoWidth,
+            height: videoRef.current.videoHeight,
+            timestamp: Date.now()
+          });
 
-        if (response.ok) {
-          const poseData = await response.json();
-          // Draw skeleton
-          drawSkeleton(poseData);
+        } catch (error) {
+          console.error('Reference video pose detection error:', error);
         }
-      } catch (error) {
-        console.error('Reference video pose detection error:', error);
       }
     }
 
+    // Schedule next frame immediately (no blocking!)
     animationRef.current = requestAnimationFrame(detectPose);
   };
 
@@ -553,6 +610,22 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 pointerEvents: 'none'
               }}
             />
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: 'rgba(0, 0, 0, 0.7)',
+              color: '#00ff00',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              zIndex: 10,
+              pointerEvents: 'none'
+            }}>
+              Reference: {referenceFps} FPS
+            </div>
           </div>
 
           <button

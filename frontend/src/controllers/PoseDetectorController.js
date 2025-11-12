@@ -372,55 +372,56 @@ export const usePoseDetectorController = () => {
       });
     }
 
-    // Draw hands
-    const drawHand = (landmarks) => {
-      if (!landmarks || landmarks.length === 0) return;
+    // HAND TRACKING DISABLED
+    // // Draw hands
+    // const drawHand = (landmarks) => {
+    //   if (!landmarks || landmarks.length === 0) return;
 
-      const landmarkMap = {};
-      landmarks.forEach((landmark) => {
-        landmarkMap[landmark.name] = landmark;
-      });
+    //   const landmarkMap = {};
+    //   landmarks.forEach((landmark) => {
+    //     landmarkMap[landmark.name] = landmark;
+    //   });
 
-      ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
+    //   ctx.strokeStyle = 'rgba(64, 224, 208, 0.8)';
+    //   ctx.lineWidth = 3;
+    //   ctx.lineCap = 'round';
 
-      HAND_CONNECTIONS_BY_NAME.forEach(([startName, endName]) => {
-        const startPoint = landmarkMap[startName];
-        const endPoint = landmarkMap[endName];
+    //   HAND_CONNECTIONS_BY_NAME.forEach(([startName, endName]) => {
+    //     const startPoint = landmarkMap[startName];
+    //     const endPoint = landmarkMap[endName];
 
-        if (startPoint && endPoint) {
-          ctx.beginPath();
-          ctx.moveTo(startPoint.x, startPoint.y);
-          ctx.lineTo(endPoint.x, endPoint.y);
-          ctx.stroke();
-        }
-      });
+    //     if (startPoint && endPoint) {
+    //       ctx.beginPath();
+    //       ctx.moveTo(startPoint.x, startPoint.y);
+    //       ctx.lineTo(endPoint.x, endPoint.y);
+    //       ctx.stroke();
+    //     }
+    //   });
 
-      TRACKED_HAND_LANDMARKS.forEach((name) => {
-        const landmark = landmarkMap[name];
-        if (!landmark) {
-          return;
-        }
+    //   TRACKED_HAND_LANDMARKS.forEach((name) => {
+    //     const landmark = landmarkMap[name];
+    //     if (!landmark) {
+    //       return;
+    //     }
 
-        const gradient = ctx.createRadialGradient(
-          landmark.x, landmark.y, 0,
-          landmark.x, landmark.y, 8
-        );
-        gradient.addColorStop(0, '#40E0D0');
-        gradient.addColorStop(1, '#1E90FF');
+    //     const gradient = ctx.createRadialGradient(
+    //       landmark.x, landmark.y, 0,
+    //       landmark.x, landmark.y, 8
+    //     );
+    //     gradient.addColorStop(0, '#40E0D0');
+    //     gradient.addColorStop(1, '#1E90FF');
 
-        ctx.beginPath();
-        ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-      });
-    };
+    //     ctx.beginPath();
+    //     ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
+    //     ctx.fillStyle = gradient;
+    //     ctx.fill();
+    //   });
+    // };
 
-    if (poses.hands) {
-      drawHand(poses.hands.left);
-      drawHand(poses.hands.right);
-    }
+    // if (poses.hands) {
+    //   drawHand(poses.hands.left);
+    //   drawHand(poses.hands.right);
+    // }
   };
 
   /**
