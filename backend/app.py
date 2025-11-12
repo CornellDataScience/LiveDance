@@ -21,6 +21,7 @@ import time
 import base64
 import threading
 from io import BytesIO
+import multiprocessing
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -71,44 +72,49 @@ class LatestFrameBuffer:
 # Global buffer instance
 frame_buffer = LatestFrameBuffer()
 
+# Global multiprocessing pool for reference video processing
+reference_pool = None
+
 # =============================================================================
 # MediaPipe Setup for LIVE_STREAM mode
 # =============================================================================
 mp_pose = mp.solutions.pose
-mp_hands = mp.solutions.hands
+# mp_hands = mp.solutions.hands  # HAND TRACKING DISABLED
 
 # Initialize detectors for WebSocket (LIVE_STREAM mode)
 pose = mp_pose.Pose(
     static_image_mode=False,  # LIVE_STREAM mode
-    model_complexity=1,
+    model_complexity=0,  # Optimized for 60 FPS (was 1)
     smooth_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
 )
 
-hands = mp_hands.Hands(
-    static_image_mode=False,  # LIVE_STREAM mode
-    max_num_hands=2,
-    model_complexity=1,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+# HAND TRACKING DISABLED
+# hands = mp_hands.Hands(
+#     static_image_mode=False,  # LIVE_STREAM mode
+#     max_num_hands=2,
+#     model_complexity=1,
+#     min_detection_confidence=0.5,
+#     min_tracking_confidence=0.5,
+# )
 
 # Create SEPARATE pose and hands detectors for HTTP endpoints (camera/reference)
 pose_camera = mp_pose.Pose(
     static_image_mode=True,
-    model_complexity=1,
+    model_complexity=0,  # Optimized for 60 FPS (was 1)
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
 )
 
-hands_camera = mp_hands.Hands(
-    static_image_mode=True,
-    max_num_hands=2,
-    model_complexity=1,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+# HAND TRACKING DISABLED
+# hands_camera = mp_hands.Hands(
+#     static_image_mode=True,
+#     max_num_hands=2,
+#     model_complexity=1,
+#     min_detection_confidence=0.5,
+#     min_tracking_confidence=0.5,
+# )
 
 pose_reference = mp_pose.Pose(
     static_image_mode=True,
@@ -117,13 +123,76 @@ pose_reference = mp_pose.Pose(
     min_tracking_confidence=0.5,
 )
 
-hands_reference = mp_hands.Hands(
-    static_image_mode=True,
-    max_num_hands=2,
-    model_complexity=1,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+# HAND TRACKING DISABLED
+# hands_reference = mp_hands.Hands(
+#     static_image_mode=True,
+#     max_num_hands=2,
+#     model_complexity=1,
+#     min_detection_confidence=0.5,
+#     min_tracking_confidence=0.5,
+# )
+
+# =============================================================================
+# Multiprocessing Worker for Reference Video Processing
+# =============================================================================
+# Global worker-process MediaPipe instance (initialized per worker)
+_worker_pose = None
+
+def init_worker():
+    """Initialize MediaPipe in worker process"""
+    global _worker_pose
+    mp_pose_worker = mp.solutions.pose
+    _worker_pose = mp_pose_worker.Pose(
+        static_image_mode=True,
+        model_complexity=0,  # Optimized for 60 FPS (was 1)
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+    print(f"✅ Worker process {multiprocessing.current_process().pid} initialized MediaPipe")
+
+def process_reference_frame_worker(frame_bytes, width, height):
+    """
+    Worker function for processing reference video frames in separate process.
+    Runs in isolated process with separate GIL.
+    """
+    try:
+        # Decode image
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if image is None:
+            return {"body": [], "hands": {"left": [], "right": []}}
+
+        # Convert to RGB for MediaPipe
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # Process pose using worker's MediaPipe instance
+        pose_results = _worker_pose.process(image_rgb)
+        body_landmarks = []
+
+        if pose_results.pose_landmarks:
+            landmarks = pose_results.pose_landmarks.landmark
+
+            # Extract keypoints matching MoveNet format
+            for idx, name in zip(MOVENET_INDICES, MOVENET_NAMES):
+                if idx < len(landmarks):
+                    lm = landmarks[idx]
+                    body_landmarks.append({
+                        "name": name,
+                        "x": round(lm.x * width, 1),
+                        "y": round(lm.y * height, 1),
+                        "confidence": round(lm.visibility * 100),
+                        "visible": lm.visibility > 0.3,
+                    })
+
+        # HAND TRACKING DISABLED
+        hand_landmarks = {"left": [], "right": []}
+
+        return {"body": body_landmarks, "hands": hand_landmarks}
+
+    except Exception as e:
+        print(f"❌ Error in worker process: {e}")
+        return {"body": [], "hands": {"left": [], "right": []}}
 
 # Monotonic timestamp generator
 class TimestampGenerator:
@@ -384,7 +453,7 @@ smoother = PoseSmoothing(alpha=0.7)
 # =============================================================================
 # Frame downscaling for performance
 # =============================================================================
-def downscale_frame(image, target_short_side=384):
+def downscale_frame(image, target_short_side=256):
     """Downscale image to target short side while maintaining aspect ratio"""
     height, width = image.shape[:2]
     
@@ -441,9 +510,9 @@ def inference_loop():
             # Store original dimensions BEFORE downscaling (FIX for skeleton offset)
             original_height, original_width = image.shape[:2]
 
-            # Downscale for performance
+            # Downscale for performance (256px for 60 FPS target)
             downscale_start = time.perf_counter()
-            image = downscale_frame(image, target_short_side=384)
+            image = downscale_frame(image, target_short_side=256)
             timings['downscale'] = (time.perf_counter() - downscale_start) * 1000
 
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -454,16 +523,21 @@ def inference_loop():
             pose_results = pose.process(image_rgb)
             timings['pose_detection'] = (time.perf_counter() - pose_start) * 1000
 
-            # Process hands
-            hands_start = time.perf_counter()
-            hand_results = hands.process(image_rgb)
-            timings['hand_detection'] = (time.perf_counter() - hands_start) * 1000
+            # HAND TRACKING DISABLED
+            # # Process hands
+            # hands_start = time.perf_counter()
+            # hand_results = hands.process(image_rgb)
+            # timings['hand_detection'] = (time.perf_counter() - hands_start) * 1000
+            timings['hand_detection'] = 0.0
 
             # Extract body landmarks
             body_landmarks = []
             keypoints_2d = []
             pose_3d_angles = {}
             pose_3d_coords = {}
+
+            # Get use3D flag before processing (fix UnboundLocalError)
+            use3D = frame_data.get('use3D', True)
 
             if pose_results.pose_landmarks:
                 landmarks = pose_results.pose_landmarks.landmark
@@ -481,44 +555,44 @@ def inference_loop():
                         keypoints_2d.append([lm.x, lm.y])
 
                 # 3D pose estimation using MediaPipe world landmarks (only if use3D is True)
-                use3D = frame_data.get('use3D', True)
                 angles_start = time.perf_counter()
                 if use3D and pose_results.pose_world_landmarks:
                     world_landmarks = pose_results.pose_world_landmarks.landmark
                     pose_3d_angles, pose_3d_coords = calculate_3d_angles_mediapipe(world_landmarks)
                 timings['3d_calculation'] = (time.perf_counter() - angles_start) * 1000
 
-            # Extract hand landmarks
+            # HAND TRACKING DISABLED
+            # # Extract hand landmarks
             hand_landmarks = {"left": [], "right": []}
 
-            if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-                for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
-                    handedness = hand_results.multi_handedness[hand_idx].classification[0].label
-                    hand_side = handedness.lower()
+            # if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
+            #     for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
+            #         handedness = hand_results.multi_handedness[hand_idx].classification[0].label
+            #         hand_side = handedness.lower()
 
-                    if hand_side not in hand_landmarks:
-                        continue
+            #         if hand_side not in hand_landmarks:
+            #             continue
 
-                    hand_data = []
-                    for landmark_name, mp_index in HAND_LANDMARK_SELECTION:
-                        if mp_index >= len(hand_lms.landmark):
-                            continue
-                        lm = hand_lms.landmark[mp_index]
-                        hand_data.append({
-                            "name": landmark_name,
-                            "x": round(lm.x * original_width, 1),  # Use ORIGINAL dimensions
-                            "y": round(lm.y * original_height, 1),  # Use ORIGINAL dimensions
-                            "z": round(lm.z, 3),
-                            "normalized_x": round(lm.x, 3),
-                            "normalized_y": round(lm.y, 3),
-                        })
-                    
-                    hand_landmarks[hand_side] = hand_data
+            #         hand_data = []
+            #         for landmark_name, mp_index in HAND_LANDMARK_SELECTION:
+            #             if mp_index >= len(hand_lms.landmark):
+            #                 continue
+            #             lm = hand_lms.landmark[mp_index]
+            #             hand_data.append({
+            #                 "name": landmark_name,
+            #                 "x": round(lm.x * original_width, 1),  # Use ORIGINAL dimensions
+            #                 "y": round(lm.y * original_height, 1),  # Use ORIGINAL dimensions
+            #                 "z": round(lm.z, 3),
+            #                 "normalized_x": round(lm.x, 3),
+            #                 "normalized_y": round(lm.y, 3),
+            #             })
+            #         
+            #         hand_landmarks[hand_side] = hand_data
             
             # Apply EMA smoothing
             smooth_start = time.perf_counter()
             body_landmarks = smoother.smooth_body(body_landmarks)
-            hand_landmarks = smoother.smooth_hands(hand_landmarks)
+            # hand_landmarks = smoother.smooth_hands(hand_landmarks)  # HAND TRACKING DISABLED
             if use3D:
                 pose_3d_angles = smoother.smooth_3d_angles(pose_3d_angles)
                 pose_3d_coords = smoother.smooth_3d_coords(pose_3d_coords)
@@ -596,12 +670,60 @@ def handle_frame(data):
         timestamp = data.get('timestamp', time.time())
         sequence = data.get('sequence', 0)
         use3D = data.get('use3D', True)  # Get mode from client
-        
+
         # Put frame in buffer (overwrites any existing frame)
         frame_buffer.put(frame_bytes, timestamp, sequence, use3D)
-        
+
     except Exception as e:
         print(f"❌ Error receiving frame: {e}")
+
+@socketio.on('reference_frame')
+def handle_reference_frame(data):
+    """
+    Receive reference video frame via WebSocket and process asynchronously.
+    Uses multiprocessing pool to avoid blocking camera feed.
+    """
+    try:
+        frame_bytes = data.get('image')
+        width = data.get('width')
+        height = data.get('height')
+        timestamp = data.get('timestamp', time.time())
+
+        if not frame_bytes or not width or not height:
+            return
+
+        # Decode base64 image
+        image_bytes = base64.b64decode(frame_bytes)
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if image is None:
+            return
+
+        # Re-encode for worker process
+        _, buffer = cv2.imencode('.jpg', image)
+        encoded_bytes = buffer.tobytes()
+
+        # Process asynchronously in worker process (non-blocking!)
+        def on_result_ready(result):
+            """Callback when worker completes processing"""
+            socketio.emit('reference_pose_result', {
+                'body': result['body'],
+                'hands': result['hands'],
+                'timestamp': timestamp
+            })
+
+        # Submit to process pool asynchronously
+        reference_pool.apply_async(
+            process_reference_frame_worker,
+            (encoded_bytes, width, height),
+            callback=on_result_ready
+        )
+
+    except Exception as e:
+        print(f"❌ Error receiving reference frame: {e}")
+        import traceback
+        traceback.print_exc()
 
 # =============================================================================
 # Health Check Endpoint
@@ -659,27 +781,28 @@ def estimate_pose():
                         "visible": lm.visibility > 0.3,
                     })
 
-        # Process hands using CAMERA-SPECIFIC instance
-        hand_results = hands_camera.process(image_rgb)
+        # HAND TRACKING DISABLED
+        # # Process hands using CAMERA-SPECIFIC instance
+        # hand_results = hands_camera.process(image_rgb)
         hand_landmarks = {"left": [], "right": []}
 
-        if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-            for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
-                handedness = hand_results.multi_handedness[hand_idx].classification[0].label
-                hand_side = handedness.lower()
+        # if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
+        #     for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
+        #         handedness = hand_results.multi_handedness[hand_idx].classification[0].label
+        #         hand_side = handedness.lower()
 
-                hand_data = []
-                for lm_idx, lm in enumerate(hand_lms.landmark):
-                    hand_data.append({
-                        "name": HAND_LANDMARK_NAMES[lm_idx],
-                        "x": round(lm.x * width, 1),
-                        "y": round(lm.y * height, 1),
-                        "z": round(lm.z, 3),
-                        "normalized_x": round(lm.x, 3),
-                        "normalized_y": round(lm.y, 3),
-                    })
+        #         hand_data = []
+        #         for lm_idx, lm in enumerate(hand_lms.landmark):
+        #             hand_data.append({
+        #                 "name": HAND_LANDMARK_NAMES[lm_idx],
+        #                 "x": round(lm.x * width, 1),
+        #                 "y": round(lm.y * height, 1),
+        #                 "z": round(lm.z, 3),
+        #                 "normalized_x": round(lm.x, 3),
+        #                 "normalized_y": round(lm.y, 3),
+        #             })
 
-                hand_landmarks[hand_side] = hand_data
+        #         hand_landmarks[hand_side] = hand_data
 
         # Return results
         return jsonify({"body": body_landmarks, "hands": hand_landmarks})
@@ -692,8 +815,8 @@ def estimate_pose():
 @app.route("/estimate_pose_reference", methods=["POST"])
 def estimate_pose_reference():
     """
-    Process REFERENCE VIDEO frame and return body and hand landmarks
-    Uses dedicated reference video pose estimator instances
+    Process REFERENCE VIDEO frame using multiprocessing worker
+    Uses separate process with isolated GIL to avoid blocking camera feed
     Expects: multipart/form-data with 'frame' image file
     Returns: JSON with body and hands landmark data
     """
@@ -704,62 +827,25 @@ def estimate_pose_reference():
 
         file = request.files["frame"]
 
-        # Convert to OpenCV image
-        image = Image.open(BytesIO(file.read()))
-        image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # Read file bytes and get dimensions
+        file_bytes = file.read()
+        image = Image.open(BytesIO(file_bytes))
+        width, height = image.size
 
-        # Get image dimensions
-        height, width = image.shape[:2]
+        # Convert to OpenCV format bytes for worker
+        image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        _, buffer = cv2.imencode('.jpg', image_cv)
+        frame_bytes = buffer.tobytes()
 
-        # Convert to RGB for MediaPipe
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Process in separate worker process (bypasses GIL!)
+        result = reference_pool.apply(process_reference_frame_worker, (frame_bytes, width, height))
 
-        # Process body pose using REFERENCE-SPECIFIC instance
-        pose_results = pose_reference.process(image_rgb)
-        body_landmarks = []
-
-        if pose_results.pose_landmarks:
-            landmarks = pose_results.pose_landmarks.landmark
-
-            # Extract only the 17 keypoints matching MoveNet format
-            for idx, name in zip(MOVENET_INDICES, MOVENET_NAMES):
-                if idx < len(landmarks):
-                    lm = landmarks[idx]
-                    body_landmarks.append({
-                        "name": name,
-                        "x": round(lm.x * width, 1),
-                        "y": round(lm.y * height, 1),
-                        "confidence": round(lm.visibility * 100),
-                        "visible": lm.visibility > 0.3,
-                    })
-
-        # Process hands using REFERENCE-SPECIFIC instance
-        hand_results = hands_reference.process(image_rgb)
-        hand_landmarks = {"left": [], "right": []}
-
-        if hand_results.multi_hand_landmarks and hand_results.multi_handedness:
-            for hand_idx, hand_lms in enumerate(hand_results.multi_hand_landmarks):
-                handedness = hand_results.multi_handedness[hand_idx].classification[0].label
-                hand_side = handedness.lower()
-
-                hand_data = []
-                for lm_idx, lm in enumerate(hand_lms.landmark):
-                    hand_data.append({
-                        "name": HAND_LANDMARK_NAMES[lm_idx],
-                        "x": round(lm.x * width, 1),
-                        "y": round(lm.y * height, 1),
-                        "z": round(lm.z, 3),
-                        "normalized_x": round(lm.x, 3),
-                        "normalized_y": round(lm.y, 3),
-                    })
-
-                hand_landmarks[hand_side] = hand_data
-
-        # Return results
-        return jsonify({"body": body_landmarks, "hands": hand_landmarks})
+        return jsonify(result)
 
     except Exception as e:
         print(f"Error processing reference frame: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"body": [], "hands": {"left": [], "right": []}}), 200
 
 
@@ -960,8 +1046,24 @@ def serve_video(filename):
 # =============================================================================
 # Server Startup
 # =============================================================================
+def init_multiprocessing_pool():
+    """Initialize multiprocessing pool for reference video processing"""
+    global reference_pool
+
+    # Use spawn method for compatibility with MediaPipe/OpenCV
+    multiprocessing.set_start_method('spawn', force=True)
+
+    # Create pool with 1 worker process dedicated to reference video
+    reference_pool = multiprocessing.Pool(processes=1, initializer=init_worker)
+
+    print("🔧 Multiprocessing pool initialized (1 worker process)")
+
 if __name__ == "__main__":
     print("🚀 LiveDance Python Backend Starting...")
+
+    # Initialize multiprocessing pool
+    init_multiprocessing_pool()
+
     print("📡 Server running at http://localhost:8000")
     print("💃 Ready to track dance poses!")
     print("🎯 Features:")
@@ -971,4 +1073,5 @@ if __name__ == "__main__":
     print("   - Frame downscaling for performance")
     print("   - YouTube video download & serving")
     print("   - HTTP fallback endpoints")
+    print("   - Multiprocessing for reference video (no GIL blocking)")
     socketio.run(app, host="0.0.0.0", port=8000, debug=False, allow_unsafe_werkzeug=True)

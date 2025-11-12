@@ -131,7 +131,7 @@ const PoseDetectorView = ({
               
               <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>FPS:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Camera FPS:</span>
                   <span style={{ color: '#40E0D0', fontWeight: '600' }}>{performanceMetrics.fps}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
