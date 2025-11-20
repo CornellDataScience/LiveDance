@@ -31,7 +31,10 @@ const PoseDetectorView = ({
   cameraEnabled,
   toggleCamera,
   showPerformanceMonitor,
-  togglePerformanceMonitor
+  togglePerformanceMonitor,
+  topImprovements,
+  overallScore,
+  handleReferencePose
 }) => {
   return (
     <div style={{ 
@@ -343,6 +346,7 @@ const PoseDetectorView = ({
             onVideoSelect={handleReferenceVideoSelect}
             videoPlayerControlRef={videoPlayerControlRef}
             setVideoPlaying={setVideoPlaying}
+            onReferencePose={handleReferencePose}
           />
         </div>
 
@@ -459,6 +463,115 @@ const PoseDetectorView = ({
           </div>
         </div>
       </div>
+
+      {/* Top 10 Improvements Panel */}
+      {isReady && topImprovements && topImprovements.length > 0 && (
+        <div style={{
+          maxWidth: '1400px',
+          margin: '20px auto 0'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '24px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: 'white',
+                fontSize: '20px',
+                fontWeight: '600'
+              }}>
+                Areas to Improve
+              </h3>
+              {overallScore !== null && (
+                <div style={{
+                  background: overallScore >= 80 ? 'rgba(72, 187, 120, 0.3)' :
+                             overallScore >= 60 ? 'rgba(237, 137, 54, 0.3)' :
+                             'rgba(245, 101, 101, 0.3)',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '16px'
+                }}>
+                  Overall Score: {overallScore}%
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+              gap: '12px'
+            }}>
+              {topImprovements.map((item, idx) => (
+                <div key={item.joint} style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{
+                      color: 'white',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}>
+                      #{idx + 1} {item.name}
+                    </span>
+                    <span style={{
+                      color: item.score >= 80 ? '#48bb78' :
+                             item.score >= 60 ? '#ed8936' :
+                             '#f56565',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}>
+                      {item.score}%
+                    </span>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '4px',
+                    height: '6px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${item.score}%`,
+                      height: '100%',
+                      background: item.score >= 80 ? '#48bb78' :
+                                  item.score >= 60 ? '#ed8936' :
+                                  '#f56565',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontStyle: 'italic'
+                  }}>
+                    {item.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Data Display Panel (below videos) */}
       {isReady && (

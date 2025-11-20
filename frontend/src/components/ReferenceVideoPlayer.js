@@ -7,7 +7,7 @@ import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonSt
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +263,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           const poseData = await response.json();
           // Draw skeleton
           drawSkeleton(poseData);
+          // Pass reference pose to parent for comparison
+          if (onReferencePose && poseData.body) {
+            onReferencePose(poseData.body);
+          }
         }
       } catch (error) {
         console.error('Reference video pose detection error:', error);
