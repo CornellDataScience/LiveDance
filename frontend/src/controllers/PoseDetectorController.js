@@ -306,10 +306,10 @@ export const usePoseDetectorController = () => {
       return 'a lot';
     };
 
-    // Horizontal direction (dx > 0 means user is too far right, need to move left)
+    // Horizontal direction (dx > 0 means user is too far right on screen, but due to mirror view, tell them to move right)
     const hMag = getMagnitudeWord(dx);
     if (hMag !== null) {
-      const hDir = dx > 0 ? 'left' : 'right';
+      const hDir = dx > 0 ? 'right' : 'left';
       directions.push(`${hMag} ${hDir}`.trim());
     }
 
