@@ -7,7 +7,7 @@ import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonSt
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         socketRef.current.on('reference_pose_result', (data) => {
           // Draw skeleton with received pose data
           drawSkeleton(data);
+          // Pass reference pose to parent for comparison
+          if (onReferencePose && data.body) {
+            onReferencePose(data.body);
+          }
         });
       }).catch(err => {
         console.error('Failed to connect to WebSocket:', err);
@@ -55,6 +59,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       // Already connected, just add listener
       socketRef.current.on('reference_pose_result', (data) => {
         drawSkeleton(data);
+        // Pass reference pose to parent for comparison
+        if (onReferencePose && data.body) {
+          onReferencePose(data.body);
+        }
       });
     }
 
