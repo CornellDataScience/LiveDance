@@ -77,20 +77,21 @@ export const usePoseDetectorController = () => {
   const referencePoseHistory = useRef([]);
   const lastAggregatedRef = useRef({ improvements: [], overall: null });
   // Minimum joints required to compute a score; keep strict but not so strict that we drop all frames
-  const MIN_VISIBLE_JOINTS = 10;
+  // Require more keypoints so partial views score low
+  const MIN_VISIBLE_JOINTS = 12;
   const JOINT_WEIGHTS = {
-    left_shoulder: 1.3,
-    right_shoulder: 1.3,
-    left_elbow: 1.3,
-    right_elbow: 1.3,
-    left_wrist: 1.4,
-    right_wrist: 1.4,
-    left_hip: 1.1,
-    right_hip: 1.1,
-    left_knee: 1.2,
-    right_knee: 1.2,
-    left_ankle: 1.2,
-    right_ankle: 1.2
+    left_shoulder: 1.6,
+    right_shoulder: 1.6,
+    left_elbow: 1.6,
+    right_elbow: 1.6,
+    left_wrist: 1.8,
+    right_wrist: 1.8,
+    left_hip: 1.3,
+    right_hip: 1.3,
+    left_knee: 1.5,
+    right_knee: 1.5,
+    left_ankle: 1.5,
+    right_ankle: 1.5
   };
 
   // Human-readable names for body parts
@@ -261,9 +262,19 @@ export const usePoseDetectorController = () => {
   const normalizePose = (landmarks) => {
     if (!landmarks || landmarks.length < 17) return null;
 
-    // Confidence check slightly relaxed to avoid dropping too many frames
-    const visibleCount = landmarks.filter(lm => lm.visible && lm.confidence > 50).length;
+    const visibleCount = landmarks.filter(lm => lm.visible && lm.confidence > 60).length;
     if (visibleCount < MIN_VISIBLE_JOINTS) return null;
+
+    // Require at least one wrist/elbow and one ankle/knee visible to avoid head-only high scores
+    const armVisible = landmarks.some(lm =>
+      lm.visible && lm.confidence > 60 &&
+      (lm.name?.includes('wrist') || lm.name?.includes('elbow'))
+    );
+    const legVisible = landmarks.some(lm =>
+      lm.visible && lm.confidence > 60 &&
+      (lm.name?.includes('ankle') || lm.name?.includes('knee'))
+    );
+    if (!armVisible || !legVisible) return null;
 
     const leftShoulder = landmarks.find(lm => lm.name === 'left_shoulder');
     const rightShoulder = landmarks.find(lm => lm.name === 'right_shoulder');
@@ -306,7 +317,7 @@ export const usePoseDetectorController = () => {
         const dy = userPose[jointName].y - refPose[jointName].y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         // Harsher decay on distance
-        const decayFactor = 2.5;
+        const decayFactor = 4.0;
         const similarity = 100 * Math.exp(-distance * decayFactor);
         const weight = JOINT_WEIGHTS[jointName] || 1;
 
@@ -584,7 +595,7 @@ export const usePoseDetectorController = () => {
     }));
 
     // Calculate overall score
-    // Weighted overall (harsher because critical joints weigh more)
+    // Weighted overall with stronger visibility/coverage penalties
     let weightedTotal = 0;
     let weightSum = 0;
     Object.entries(avgScores).forEach(([joint, score]) => {
@@ -592,9 +603,18 @@ export const usePoseDetectorController = () => {
       weightedTotal += score * w;
       weightSum += w;
     });
-    const overall = weightSum > 0
-      ? Math.round((weightedTotal / weightSum) * 10) / 10
+    const baseOverall = weightSum > 0
+      ? weightedTotal / weightSum
       : 0;
+
+    // Coverage factors by region to avoid head-only inflation
+    const joints = Object.keys(avgScores);
+    const armCoverage = joints.filter(j => j.includes('wrist') || j.includes('elbow') || j.includes('shoulder')).length / 6; // 6 arm joints tracked
+    const legCoverage = joints.filter(j => j.includes('ankle') || j.includes('knee') || j.includes('hip')).length / 6; // 6 leg joints tracked
+    const overallCoverage = Math.min(1, joints.length / 17);
+    const coverageFactor = Math.min(1, Math.max(0, armCoverage) * Math.max(0, legCoverage) * overallCoverage * 2); // cap at 1, but multiplicative penalty
+
+    const overall = Math.round((baseOverall * coverageFactor) * 10) / 10;
 
     setTopImprovements(improvements);
     setOverallScore(overall);
@@ -1158,7 +1178,7 @@ export const usePoseDetectorController = () => {
    * Aggregate and calculate improvements every second
    */
   useEffect(() => {
-    if (!comparisonActive || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
+    if (!comparisonActive || !referencePose) {
       // Clear improvements when video stops
       if (!comparisonActive) {
         if (topImprovements.length > 0) {
@@ -1171,6 +1191,16 @@ export const usePoseDetectorController = () => {
       return;
     }
 
+    // If user is not detected, still show low score feedback
+    if (!bodyLandmarks || bodyLandmarks.length === 0) {
+      setLiveFeedback({
+        timing: null,
+        cues: [{ text: 'Step into frame for tracking' }],
+        matchScore: 0
+      });
+      return;
+    }
+
     const bestMatch = findBestReferenceMatch(bodyLandmarks);
     if (bestMatch) {
       const timingFeedback = getTimingFeedback(bestMatch);
@@ -1178,6 +1208,12 @@ export const usePoseDetectorController = () => {
         timing: timingFeedback,
         cues: buildDirectionalCues(bestMatch, timingFeedback),
         matchScore: Math.round(bestMatch.avgScore)
+      });
+    } else {
+      setLiveFeedback({
+        timing: null,
+        cues: [{ text: 'Low visibility — move closer or center yourself' }],
+        matchScore: 0
       });
     }
 

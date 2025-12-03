@@ -69,33 +69,27 @@ const PoseDetectorView = ({
         </p>
       </div>
 
-      {/* Live Feedback Overlay */}
+      {/* Live Feedback Inline Card */}
       {isReady && liveFeedback && (liveFeedback.timing || (liveFeedback.cues && liveFeedback.cues.length > 0)) && (
         <div style={{
-          position: 'fixed',
-          top: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 2000,
-          minWidth: '320px',
-          maxWidth: '640px',
-          background: 'rgba(17, 24, 39, 0.8)',
+          maxWidth: '900px',
+          margin: '0 auto 20px',
+          background: 'rgba(17, 24, 39, 0.75)',
           border: '1px solid rgba(255, 255, 255, 0.25)',
           borderRadius: '16px',
-          padding: '14px 18px',
-          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.35)',
-          color: 'white',
-          backdropFilter: 'blur(12px)'
+          padding: '16px 18px',
+          boxShadow: '0 10px 24px rgba(0, 0, 0, 0.25)',
+          color: 'white'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{
-              fontSize: '17px',
+              fontSize: '18px',
               fontWeight: '700',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}>
-              <span role="img" aria-label="sparkles">🎮</span>
+              <span role="img" aria-label="sparkles">✨</span>
               Dance Coach
             </div>
             {liveFeedback.matchScore && (
