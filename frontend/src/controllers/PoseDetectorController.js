@@ -37,6 +37,68 @@ const HAND_CONNECTIONS_BY_NAME = [
  * Camera feed is captured in frontend, all pose estimation happens in Python backend
  */
 export const usePoseDetectorController = () => {
+
+  // Add these imports at the top
+
+// Inside your usePoseDetectorController hook, add these state variables:
+const [isTracking, setIsTracking] = useState(false);
+const [report, setReport] = useState(null);
+const [showReport, setShowReport] = useState(false);
+
+// Add these handler functions:
+const handleStartTracking = async () => {
+  try {
+    const response = await fetch('http://localhost:8000/start_tracking', {
+      method: 'POST',
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      setIsTracking(true);
+      setShowReport(false);
+      setReport(null);
+      console.log('✅ Tracking started:', data.session_id);
+    }
+  } catch (error) {
+    console.error('❌ Error starting tracking:', error);
+  }
+};
+
+const handleStopTracking = async () => {
+  try {
+    const response = await fetch('http://localhost:8000/stop_tracking', {
+      method: 'POST',
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      setIsTracking(false);
+      setReport(data.report);
+      setShowReport(true);
+      console.log('✅ Tracking stopped, report generated');
+    }
+  } catch (error) {
+    console.error('❌ Error stopping tracking:', error);
+  }
+};
+
+const handleCloseReport = () => {
+  setShowReport(false);
+};
+
+// At the bottom of the controller, add these to the return statement:
+return {
+  // ... all your existing returns
+  
+  // Add these new ones:
+  isTracking,
+  report,
+  showReport,
+  handleStartTracking,
+  handleStopTracking,
+  handleCloseReport,
+};
+
   // Refs for DOM elements
   const videoRef = useRef(null);
   const canvasRef = useRef(null);

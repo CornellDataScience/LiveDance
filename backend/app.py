@@ -21,6 +21,11 @@ import time
 import base64
 import threading
 from io import BytesIO
+import random # Needed for mock comparison function
+from pathlib import Path
+import json 
+from datetime import datetime
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -30,8 +35,404 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_
 youtube_downloader = YouTubeDownloader(output_dir="downloads")
 
 # =============================================================================
-# LATEST-WINS BUFFER - Core of the optimization
+# ENHANCED ERROR TRACKING WITH SCREENSHOTS
 # =============================================================================
+class MistakeTracker:
+    """
+    Enhanced tracker that captures screenshots of major errors and generates
+    comprehensive reports with visual comparisons.
+    """
+    def __init__(self, max_mistakes=1000, screenshot_dir="mistake_screenshots"):
+        self.max_mistakes = max_mistakes
+        self.screenshot_dir = Path(screenshot_dir)
+        self.screenshot_dir.mkdir(exist_ok=True)
+        
+        # Stores: [{'joint': str, 'error_score': float, 'timestamp': float, 
+        #           'frame': int, 'screenshot_path': str}, ...]
+        self.error_history = deque(maxlen=max_mistakes)
+        self.error_counts = {}  # {joint: count}
+        self.major_errors = []  # Errors > 15 degrees for screenshots
+        self.session_start_time = time.time()
+        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.lock = threading.Lock()
+        
+        # Thresholds
+        self.ERROR_THRESHOLD = 5.0  # Minimum error to log
+        self.SCREENSHOT_THRESHOLD = 15.0  # Minimum error for screenshot
+
+    def log_error(self, joint_name, error_score, timestamp, sequence, frame_image=None):
+        """
+        Logs an error event. If error is severe (>15 degrees) and frame_image 
+        is provided, saves a screenshot for later comparison.
+        
+        Args:
+            joint_name: Name of the joint with error
+            error_score: Angle difference in degrees
+            timestamp: Time of error
+            sequence: Frame sequence number
+            frame_image: OpenCV image (BGR format) to save as screenshot
+        """
+        with self.lock:
+            if error_score > self.ERROR_THRESHOLD:
+                error_entry = {
+                    'joint': joint_name,
+                    'error_score': round(error_score, 2),
+                    'timestamp': round(timestamp, 2),
+                    'frame': sequence,
+                    'screenshot_path': None
+                }
+                
+                # Capture screenshot for major errors
+                if error_score > self.SCREENSHOT_THRESHOLD and frame_image is not None:
+                    screenshot_filename = (
+                        f"{self.session_id}_frame{sequence}_{joint_name}_"
+                        f"{int(error_score)}deg.jpg"
+                    )
+                    screenshot_path = self.screenshot_dir / screenshot_filename
+                    
+                    # Save with annotation overlay
+                    annotated_frame = self._annotate_frame(
+                        frame_image.copy(), joint_name, error_score
+                    )
+                    cv2.imwrite(str(screenshot_path), annotated_frame)
+                    
+                    error_entry['screenshot_path'] = str(screenshot_path)
+                    self.major_errors.append(error_entry)
+                
+                self.error_history.append(error_entry)
+                self.error_counts[joint_name] = self.error_counts.get(joint_name, 0) + 1
+
+    def _annotate_frame(self, frame, joint_name, error_score):
+        """Add error information overlay to frame"""
+        height, width = frame.shape[:2]
+        
+        # Semi-transparent red overlay
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (width, 80), (0, 0, 200), -1)
+        frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
+        
+        # Error text
+        text = f"ERROR: {joint_name.replace('_', ' ').title()}"
+        error_text = f"{error_score:.1f} degree deviation"
+        
+        cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 
+                   0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, error_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 
+                   0.7, (255, 255, 255), 2, cv2.LINE_AA)
+        
+        return frame
+
+    def get_comprehensive_report(self):
+        """
+        Generates a comprehensive end-of-session report with:
+        1. Top 10 most frequent mistakes
+        2. Top 10 largest individual errors (with screenshots)
+        3. Overall performance summary
+        4. Improvement suggestions
+        """
+        with self.lock:
+            session_duration = time.time() - self.session_start_time
+            
+            if not self.error_history:
+                return {
+                    "session_summary": {
+                        "duration_seconds": round(session_duration, 1),
+                        "total_errors": 0,
+                        "major_errors": 0,
+                        "performance_grade": "Perfect!"
+                    },
+                    "frequent_mistakes": [],
+                    "worst_moments": [],
+                    "improvement_plan": ["Keep up the excellent work!"]
+                }
+
+            # 1. Most Frequent Mistakes
+            frequent_mistakes = sorted(
+                self.error_counts.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )[:10]
+
+            frequent_report = [
+                {
+                    "joint": joint,
+                    "count": count,
+                    "percentage": round(count / len(self.error_history) * 100, 1)
+                } 
+                for joint, count in frequent_mistakes
+            ]
+
+            # 2. Worst Individual Moments (with screenshots)
+            worst_moments = sorted(
+                [e for e in self.error_history if e['screenshot_path']],
+                key=lambda x: x['error_score'],
+                reverse=True
+            )[:10]
+
+            worst_report = [
+                {
+                    "joint": item['joint'],
+                    "error_score": item['error_score'],
+                    "timestamp": item['timestamp'],
+                    "frame": item['frame'],
+                    "screenshot": item['screenshot_path'],
+                    "time_formatted": f"{int(item['timestamp'] // 60)}:{int(item['timestamp'] % 60):02d}",
+                    "suggestion": self._get_improvement_suggestion(item['joint'], item['error_score'])
+                } 
+                for item in worst_moments
+            ]
+
+            # 3. Performance Grade
+            avg_error = sum(e['error_score'] for e in self.error_history) / len(self.error_history)
+            grade = self._calculate_grade(avg_error, len(self.major_errors))
+
+            # 4. Improvement Plan
+            improvement_plan = self._generate_improvement_plan(frequent_report, worst_report)
+
+            return {
+                "session_summary": {
+                    "session_id": self.session_id,
+                    "duration_seconds": round(session_duration, 1),
+                    "duration_formatted": f"{int(session_duration // 60)}m {int(session_duration % 60)}s",
+                    "total_errors": len(self.error_history),
+                    "major_errors": len(self.major_errors),
+                    "average_error_degrees": round(avg_error, 2),
+                    "performance_grade": grade
+                },
+                "frequent_mistakes": frequent_report,
+                "worst_moments": worst_report,
+                "improvement_plan": improvement_plan,
+                "screenshot_directory": str(self.screenshot_dir)
+            }
+
+    def _get_improvement_suggestion(self, joint_name, error_score):
+        """Generate specific improvement suggestion based on joint and error"""
+        suggestions = {
+            "left_elbow": "Keep your left elbow aligned with your shoulder. Practice arm extensions slowly.",
+            "right_elbow": "Watch your right arm angle. Try mirror practice to check form.",
+            "left_knee": "Maintain proper left knee bend. Focus on leg strength exercises.",
+            "right_knee": "Your right knee alignment needs work. Practice squats for stability.",
+            "left_shoulder": "Relax your left shoulder and maintain natural posture.",
+            "right_shoulder": "Your right shoulder tends to drift. Check your upper body alignment.",
+            "left_hip": "Engage your core to stabilize left hip movement.",
+            "right_hip": "Focus on right hip positioning during transitions."
+        }
+        
+        base_suggestion = suggestions.get(joint_name, f"Pay attention to {joint_name.replace('_', ' ')} positioning.")
+        
+        if error_score > 25:
+            return f"CRITICAL: {base_suggestion} This needs immediate attention."
+        elif error_score > 15:
+            return f"IMPORTANT: {base_suggestion}"
+        else:
+            return base_suggestion
+
+    def _calculate_grade(self, avg_error, major_error_count):
+        """Calculate performance grade based on errors"""
+        if major_error_count == 0 and avg_error < 5:
+            return "A+ Excellent!"
+        elif major_error_count <= 2 and avg_error < 8:
+            return "A Great performance!"
+        elif major_error_count <= 5 and avg_error < 10:
+            return "B+ Good work!"
+        elif major_error_count <= 8 and avg_error < 12:
+            return "B Nice effort!"
+        elif major_error_count <= 12 and avg_error < 15:
+            return "C+ Keep practicing!"
+        else:
+            return "C Room for improvement!"
+
+    def _generate_improvement_plan(self, frequent_mistakes, worst_moments):
+        """Generate personalized improvement recommendations"""
+        plan = []
+        
+        if not frequent_mistakes:
+            return ["Excellent form! Keep practicing to maintain consistency."]
+        
+        # Top problem area
+        top_issue = frequent_mistakes[0]['joint']
+        plan.append(f"PRIMARY FOCUS: Work on your {top_issue.replace('_', ' ')}. "
+                   f"This was your most frequent issue ({frequent_mistakes[0]['count']} times).")
+        
+        # If there are multiple problem areas
+        if len(frequent_mistakes) > 1:
+            problem_joints = [m['joint'].replace('_', ' ') for m in frequent_mistakes[1:4]]
+            plan.append(f"SECONDARY FOCUS: Also pay attention to {', '.join(problem_joints)}.")
+        
+        # Worst moment advice
+        if worst_moments:
+            worst = worst_moments[0]
+            plan.append(f"CRITICAL MOMENT: At {worst['time_formatted']}, your {worst['joint'].replace('_', ' ')} "
+                       f"had a {worst['error_score']}° deviation. Review this screenshot carefully.")
+        
+        # General advice based on error patterns
+        if frequent_mistakes[0]['percentage'] > 40:
+            plan.append("CONSISTENCY TIP: One joint is causing most issues. Focus intensive practice on this area.")
+        else:
+            plan.append("CONSISTENCY TIP: Errors are spread across multiple joints. Work on overall body awareness.")
+        
+        return plan
+
+    def export_report_json(self):
+        """Export report as JSON file"""
+        report = self.get_comprehensive_report()
+        report_path = self.screenshot_dir / f"report_{self.session_id}.json"
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        return str(report_path)
+    
+    def reset_tracker(self):
+        """Start a new session"""
+        with self.lock:
+            self.error_history.clear()
+            self.error_counts.clear()
+            self.major_errors.clear()
+            self.session_start_time = time.time()
+            self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# =============================================================================
+# Global mistake tracker instance and mock comparison
+# =============================================================================
+
+# Global mistake tracker instance
+mistake_tracker = MistakeTracker(max_mistakes=1000)
+
+def mock_pose_comparison(pose_angles):
+    """
+    MOCK function to simulate comparison and error scoring (difference in degrees).
+    In a real system, this would compare the user's `pose_angles` to the 
+    pre-calculated reference pose angles for the current frame.
+    """
+    mock_errors = {}
+    if not pose_angles:
+        return mock_errors
+    
+    for joint in pose_angles.keys():
+        # 5% chance of a "major" mistake (15-35 degree error)
+        if random.random() < 0.05:
+            error = random.uniform(15.0, 35.0)
+        # 95% chance of a minor error or correct pose (0.5-10 degree error)
+        else:
+            error = random.uniform(0.5, 10.0) 
+        
+        mock_errors[joint] = error
+        
+    return mock_errors
+
+# Global tracking state
+tracking_active = False
+tracking_lock = threading.Lock()
+
+
+# =============================================================================
+# UPDATED ENDPOINT ROUTES
+# =============================================================================
+
+@app.route("/get_mistake_report", methods=["GET"])
+def get_mistake_report_endpoint():
+    """Returns comprehensive mistake report with screenshots"""
+    try:
+        report = mistake_tracker.get_comprehensive_report()
+        return jsonify({"success": True, "report": report}), 200
+    except Exception as e:
+        print(f"Error generating mistake report: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/export_report", methods=["GET"])
+def export_report_endpoint():
+    """Export report as downloadable JSON file"""
+    try:
+        report_path = mistake_tracker.export_report_json()
+        return send_file(report_path, as_attachment=True)
+    except Exception as e:
+        print(f"Error exporting report: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/screenshot/<path:filename>", methods=["GET"])
+def serve_screenshot(filename):
+    """Serve screenshot images from mistake tracking"""
+    try:
+        screenshot_dir = mistake_tracker.screenshot_dir
+        return send_from_directory(screenshot_dir, filename)
+    except Exception as e:
+        print(f"Error serving screenshot: {e}")
+        return jsonify({"success": False, "error": str(e)}), 404
+
+@app.route("/reset_mistakes", methods=["POST"])
+def reset_mistakes_endpoint():
+    """Reset tracker for new session"""
+    try:
+        mistake_tracker.reset_tracker()
+        return jsonify({"success": True, "message": "New session started"}), 200
+    except Exception as e:
+        print(f"Error resetting tracker: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/start_tracking", methods=["POST"])
+def start_tracking_endpoint():
+    """
+    Start tracking mistakes for a new dance session.
+    Resets the tracker and enables error logging.
+    """
+    global tracking_active
+    try:
+        with tracking_lock:
+            tracking_active = True
+            mistake_tracker.reset_tracker()
+        
+        print("🎬 Mistake tracking STARTED")
+        return jsonify({
+            "success": True, 
+            "message": "Tracking started",
+            "session_id": mistake_tracker.session_id
+        }), 200
+    except Exception as e:
+        print(f"Error starting tracking: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/stop_tracking", methods=["POST"])
+def stop_tracking_endpoint():
+    """
+    Stop tracking mistakes and return the comprehensive report.
+    This is called when the user clicks "Stop" after their dance session.
+    """
+    global tracking_active
+    try:
+        with tracking_lock:
+            tracking_active = False
+        
+        # Generate the comprehensive report
+        report = mistake_tracker.get_comprehensive_report()
+        
+        print(f"🛑 Mistake tracking STOPPED - Generated report for session {mistake_tracker.session_id}")
+        print(f"   Total errors: {report['session_summary']['total_errors']}")
+        print(f"   Major errors: {report['session_summary']['major_errors']}")
+        print(f"   Performance: {report['session_summary']['performance_grade']}")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Tracking stopped",
+            "report": report
+        }), 200
+    except Exception as e:
+        print(f"Error stopping tracking: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/tracking_status", methods=["GET"])
+def get_tracking_status():
+    """Check if tracking is currently active"""
+    global tracking_active
+    with tracking_lock:
+        return jsonify({
+            "tracking_active": tracking_active,
+            "session_id": mistake_tracker.session_id if tracking_active else None
+        }), 200
+
+
 class LatestFrameBuffer:
     """
     Single-slot buffer that only keeps the newest frame.
@@ -515,14 +916,41 @@ def inference_loop():
                     
                     hand_landmarks[hand_side] = hand_data
             
-            # Apply EMA smoothing
+             # Apply EMA smoothing
             smooth_start = time.perf_counter()
             body_landmarks = smoother.smooth_body(body_landmarks)
             hand_landmarks = smoother.smooth_hands(hand_landmarks)
+            
             if use3D:
                 pose_3d_angles = smoother.smooth_3d_angles(pose_3d_angles)
                 pose_3d_coords = smoother.smooth_3d_coords(pose_3d_coords)
+
+                # Only log errors if tracking is active
+                with tracking_lock:
+                    is_tracking = tracking_active
+                
+                if is_tracking:
+                    # Mock Pose Comparison and Error Logging WITH SCREENSHOTS
+                    error_scores = mock_pose_comparison(pose_3d_angles)
+                    current_time = time.time() - mistake_tracker.session_start_time  # Relative time
+                    
+                    # Find the maximum error for this frame
+                    max_error = max(error_scores.values()) if error_scores else 0
+                    
+                    # Only pass the frame for screenshot if there's a major error
+                    frame_to_save = image if max_error > 15.0 else None
+                    
+                    for joint, score in error_scores.items():
+                        mistake_tracker.log_error(
+                            joint, 
+                            score, 
+                            current_time, 
+                            frame_data['sequence'],
+                            frame_image=frame_to_save  # Only passed once per frame for max error
+                        )
+
             timings['smoothing'] = (time.perf_counter() - smooth_start) * 1000
+
             
             # Total backend time
             total_backend_time = (time.perf_counter() - process_start) * 1000
@@ -545,7 +973,11 @@ def inference_loop():
                       f"TOTAL: {total_backend_time:.1f}ms | "
                       f"Dropped: {dropped}")
             
+            
             # Emit result back to client via WebSocket
+            with tracking_lock:
+                is_tracking = tracking_active
+            
             socketio.emit('pose_result', {
                 'body': body_landmarks,
                 'hands': hand_landmarks,
@@ -553,7 +985,8 @@ def inference_loop():
                 'pose_3d_coords': pose_3d_coords if use3D else {},
                 'timings': timings,
                 'sequence': frame_data['sequence'],
-                'mode': '3D' if use3D else '2D'
+                'mode': '3D' if use3D else '2D',
+                'tracking_active': is_tracking  # NEW: Let frontend know tracking status
             })
             
         except Exception as e:
@@ -612,7 +1045,22 @@ def handle_health():
     emit('health_response', {'status': 'ok'})
 
 # =============================================================================
-# HTTP Endpoints for YouTube Download and Video Serving
+# NEW: HTTP Endpoints for Mistake Reporting
+# =============================================================================
+
+@app.route("/reset_mistakes", methods=["POST"])
+def reset_mistakes_endpoint():
+    """Resets the internal mistake tracker history."""
+    try:
+        mistake_tracker.reset_tracker()
+        return jsonify({"success": True, "message": "Mistake history reset."}), 200
+    except Exception as e:
+        print(f"Error resetting mistake tracker: {e}")
+        return jsonify({"success": False, "error": "Could not reset tracker"}), 500
+
+
+# =============================================================================
+# HTTP Endpoints for YouTube Download and Video Serving (EXISTING)
 # =============================================================================
 
 @app.route("/estimate_pose", methods=["POST"])
@@ -971,4 +1419,5 @@ if __name__ == "__main__":
     print("   - Frame downscaling for performance")
     print("   - YouTube video download & serving")
     print("   - HTTP fallback endpoints")
+    print("   - NEW: Mistake Tracking and Reporting")
     socketio.run(app, host="0.0.0.0", port=8000, debug=False, allow_unsafe_werkzeug=True)

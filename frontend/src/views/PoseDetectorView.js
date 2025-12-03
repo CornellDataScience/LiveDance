@@ -1,6 +1,7 @@
 import React from 'react';
 import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
+import '../styles/PerformanceReport.css';
 
 /**
  * View: Pure UI component for pose detection display
@@ -34,7 +35,13 @@ const PoseDetectorView = ({
   togglePerformanceMonitor,
   topImprovements,
   overallScore,
-  handleReferencePose
+  handleReferencePose,
+  isTracking,
+  report,
+  showReport,
+  handleStartTracking,
+  handleStopTracking,
+  handleCloseReport,
 }) => {
   return (
     <div style={{ 
@@ -113,7 +120,7 @@ const PoseDetectorView = ({
               transform: showPerformanceMonitor ? 'rotate(180deg)' : 'rotate(0deg)',
               marginLeft: '16px'
             }}>
-              ▼
+              â–¼
             </div>
           </div>
 
@@ -168,27 +175,27 @@ const PoseDetectorView = ({
               </div>
               <div style={{ paddingLeft: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Decode:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ Decode:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.decode}ms</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Downscale:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ Downscale:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.downscale}ms</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Pose:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ Pose:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.pose}ms</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• 3D Angles:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ 3D Angles:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Hands:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ Hands:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Smoothing:</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>â€¢ Smoothing:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.smoothing}ms</span>
                 </div>
               </div>
@@ -442,7 +449,7 @@ const PoseDetectorView = ({
                     marginBottom: '16px',
                     opacity: 0.5
                   }}>
-                    📷
+                    ðŸ“·
                   </div>
                   <div style={{
                     fontSize: '16px',
@@ -778,7 +785,7 @@ const PoseDetectorView = ({
                         fontWeight: '600',
                         color: 'white'
                       }}>
-                        {angle}°
+                        {angle}Â°
                       </div>
                     </div>
                   ))}
@@ -892,8 +899,8 @@ const PoseDetectorView = ({
               fontSize: '15px'
             }}>
               <li><strong>Gesture Control:</strong> Raise your hand <strong>high and hold still</strong> for 3 seconds</li>
-              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Open palm</strong> (fingers extended) → <strong>Play</strong> video</li>
-              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Closed fist</strong> (fingers curled) → <strong>Pause</strong> video</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Open palm</strong> (fingers extended) â†’ <strong>Play</strong> video</li>
+              <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Closed fist</strong> (fingers curled) â†’ <strong>Pause</strong> video</li>
               <li><strong>Toggle "Gesture: Off"</strong> when dancing to avoid accidental triggers</li>
               <li>Click "Show Data" to see real-time position coordinates</li>
               <li>Click "Export Data" to download current positions as JSON</li>
@@ -916,4 +923,3 @@ const PoseDetectorView = ({
 };
 
 export default PoseDetectorView;
-
