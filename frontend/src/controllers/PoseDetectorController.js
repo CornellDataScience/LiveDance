@@ -51,8 +51,7 @@ export const usePoseDetectorController = () => {
   const [showData, setShowData] = useState(false);
   const [referenceVideo, setReferenceVideo] = useState(null);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [isPerformanceMonitorMinimized, setIsPerformanceMonitorMinimized] = useState(false);
-  const [audioBeat, setAudioBeat] = useState(false);
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(true);
   const streamRef = useRef(null);
 
   // Gesture detection state
@@ -63,6 +62,56 @@ export const usePoseDetectorController = () => {
   const GESTURE_DURATION = 3000; // 3 seconds
   const videoPlayerControlRef = useRef(null);
   const gesturePositionRef = useRef(null); // Track hand position for stillness check
+
+  // Pose comparison state
+  const [referencePose, setReferencePose] = useState(null);
+  const [referenceTime, setReferenceTime] = useState(null);
+  const [topImprovements, setTopImprovements] = useState([]);
+  const [overallScore, setOverallScore] = useState(null);
+  const [liveFeedback, setLiveFeedback] = useState({ timing: null, cues: [] });
+  const [finalImprovements, setFinalImprovements] = useState([]);
+  const [finalScore, setFinalScore] = useState(null);
+  const frameScoresRef = useRef([]);
+  const lastAggregateTimeRef = useRef(Date.now());
+  const referencePoseHistory = useRef([]);
+  const lastAggregatedRef = useRef({ improvements: [], overall: null });
+  // Minimum joints required to compute a score; keep strict but not so strict that we drop all frames
+  const MIN_VISIBLE_JOINTS = 10;
+  const JOINT_WEIGHTS = {
+    left_shoulder: 1.3,
+    right_shoulder: 1.3,
+    left_elbow: 1.3,
+    right_elbow: 1.3,
+    left_wrist: 1.4,
+    right_wrist: 1.4,
+    left_hip: 1.1,
+    right_hip: 1.1,
+    left_knee: 1.2,
+    right_knee: 1.2,
+    left_ankle: 1.2,
+    right_ankle: 1.2
+  };
+
+  // Human-readable names for body parts
+  const BODY_PART_NAMES = {
+    'nose': 'Head Position',
+    'left_eye': 'Left Eye',
+    'right_eye': 'Right Eye',
+    'left_ear': 'Left Ear',
+    'right_ear': 'Right Ear',
+    'left_shoulder': 'Left Shoulder',
+    'right_shoulder': 'Right Shoulder',
+    'left_elbow': 'Left Elbow',
+    'right_elbow': 'Right Elbow',
+    'left_wrist': 'Left Wrist',
+    'right_wrist': 'Right Wrist',
+    'left_hip': 'Left Hip',
+    'right_hip': 'Right Hip',
+    'left_knee': 'Left Knee',
+    'right_knee': 'Right Knee',
+    'left_ankle': 'Left Ankle',
+    'right_ankle': 'Right Ankle',
+  };
 
   // Performance metrics state
   const [performanceMetrics, setPerformanceMetrics] = useState({
@@ -206,6 +255,344 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Normalize pose to be position and scale invariant
+   */
+  const normalizePose = (landmarks) => {
+    if (!landmarks || landmarks.length < 17) return null;
+
+    // Confidence check slightly relaxed to avoid dropping too many frames
+    const visibleCount = landmarks.filter(lm => lm.visible && lm.confidence > 50).length;
+    if (visibleCount < MIN_VISIBLE_JOINTS) return null;
+
+    const leftShoulder = landmarks.find(lm => lm.name === 'left_shoulder');
+    const rightShoulder = landmarks.find(lm => lm.name === 'right_shoulder');
+
+    if (!leftShoulder || !rightShoulder) return null;
+
+    const centerX = (leftShoulder.x + rightShoulder.x) / 2;
+    const centerY = (leftShoulder.y + rightShoulder.y) / 2;
+
+    const shoulderWidth = Math.sqrt(
+      Math.pow(leftShoulder.x - rightShoulder.x, 2) +
+      Math.pow(leftShoulder.y - rightShoulder.y, 2)
+    );
+
+    if (shoulderWidth < 10) return null;
+
+    const normalized = {};
+    landmarks.forEach(lm => {
+      if (lm.visible) {
+        normalized[lm.name] = {
+          x: (lm.x - centerX) / shoulderWidth,
+          y: (lm.y - centerY) / shoulderWidth
+        };
+      }
+    });
+
+    return normalized;
+  };
+
+  /**
+   * Calculate similarity score for each joint (0-100) with directional data
+   */
+  const calculateJointSimilarity = (userPose, refPose) => {
+    if (!userPose || !refPose) return {};
+
+    const similarities = {};
+    Object.keys(userPose).forEach(jointName => {
+      if (refPose[jointName]) {
+        const dx = userPose[jointName].x - refPose[jointName].x;
+        const dy = userPose[jointName].y - refPose[jointName].y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        // Harsher decay on distance
+        const decayFactor = 2.5;
+        const similarity = 100 * Math.exp(-distance * decayFactor);
+        const weight = JOINT_WEIGHTS[jointName] || 1;
+
+        similarities[jointName] = {
+          score: Math.round(similarity * weight * 10) / 10,
+          dx: dx,
+          dy: dy
+        };
+      }
+    });
+
+    return similarities;
+  };
+
+  /**
+   * Find best matching reference frame to understand timing alignment
+   */
+  const findBestReferenceMatch = (userLandmarks) => {
+    const userNormalized = normalizePose(userLandmarks);
+    if (!userNormalized || referencePoseHistory.current.length === 0) return null;
+
+    let best = null;
+    referencePoseHistory.current.forEach(entry => {
+      const refNormalized = normalizePose(entry.pose);
+      if (!refNormalized) return;
+
+      const jointData = calculateJointSimilarity(userNormalized, refNormalized);
+      const scores = Object.values(jointData).map(j => j.score);
+      if (scores.length === 0) return;
+
+      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      if (!best || avgScore > best.avgScore) {
+        best = {
+          avgScore,
+          timestamp: entry.timestamp,
+          joints: jointData,
+          userNormalized
+        };
+      }
+    });
+
+    return best;
+  };
+
+  /**
+   * Determine whether the dancer is early/on time/late
+   */
+  const getTimingFeedback = (bestMatch) => {
+    if (!bestMatch || referencePoseHistory.current.length === 0) return null;
+
+    const latestRef = referencePoseHistory.current[referencePoseHistory.current.length - 1];
+    const prevRef = referencePoseHistory.current.length > 1
+      ? referencePoseHistory.current[referencePoseHistory.current.length - 2]
+      : null;
+
+    if (!latestRef || !latestRef.pose) return null;
+
+    const currentRefNorm = normalizePose(latestRef.pose);
+    const prevRefNorm = prevRef ? normalizePose(prevRef.pose) : null;
+    if (!currentRefNorm) return null;
+
+    const timeDelta = latestRef.timestamp - bestMatch.timestamp;
+
+    if (timeDelta > 0.25) {
+      const rounded = Math.round(timeDelta * 100) / 100;
+      return {
+        status: 'late',
+        delta: rounded,
+        message: `You're about ${rounded}s behind`
+      };
+    }
+
+    // Heuristic: if user progressed further along the motion vector than reference, they're early
+    let aheadVotes = 0;
+    let voteTotal = 0;
+    if (prevRefNorm) {
+      Object.keys(bestMatch.joints).forEach(joint => {
+        if (currentRefNorm[joint] && prevRefNorm[joint] && bestMatch.userNormalized[joint]) {
+          const motion = {
+            x: currentRefNorm[joint].x - prevRefNorm[joint].x,
+            y: currentRefNorm[joint].y - prevRefNorm[joint].y
+          };
+          const motionMagSq = motion.x * motion.x + motion.y * motion.y;
+          if (motionMagSq < 1e-6) return;
+
+          const userOffset = {
+            x: bestMatch.userNormalized[joint].x - currentRefNorm[joint].x,
+            y: bestMatch.userNormalized[joint].y - currentRefNorm[joint].y
+          };
+
+          const projection = (userOffset.x * motion.x + userOffset.y * motion.y) / motionMagSq;
+          if (projection > 0.6) {
+            aheadVotes += 1;
+          }
+          voteTotal += 1;
+        }
+      });
+    }
+
+    if (voteTotal > 0 && aheadVotes / voteTotal > 0.5) {
+      return {
+        status: 'early',
+        delta: 0,
+        message: 'You are slightly ahead—wait a beat'
+      };
+    }
+
+    return {
+      status: 'on-time',
+      delta: 0,
+      message: 'On time—keep the rhythm!'
+    };
+  };
+
+  /**
+   * Build concise directional cues (up/down/left/right) for the user
+   */
+  const buildDirectionalCues = (bestMatch) => {
+    if (!bestMatch || !bestMatch.joints) return [];
+
+    const sorted = Object.entries(bestMatch.joints)
+      .sort((a, b) => a[1].score - b[1].score)
+      .slice(0, 3);
+
+    return sorted.map(([jointName, data]) => {
+      const recommendation = getDirectionalRecommendation(data.dx, data.dy, jointName);
+      return {
+        joint: jointName,
+        name: BODY_PART_NAMES[jointName] || jointName,
+        recommendation,
+        score: Math.round(data.score)
+      };
+    }).filter(item => item.recommendation && item.recommendation !== 'Good position!');
+  };
+
+  /**
+   * Convert dx/dy to intuitive directional recommendation
+   */
+  const getDirectionalRecommendation = (dx, dy, jointName) => {
+    const directions = [];
+
+    // Determine magnitude thresholds (in normalized shoulder-width units)
+    const getMagnitudeWord = (value) => {
+      const abs = Math.abs(value);
+      if (abs < 0.15) return null; // Too small to mention
+      if (abs < 0.35) return 'slightly';
+      if (abs < 0.6) return '';
+      return 'a lot';
+    };
+
+    // Horizontal direction (dx > 0 means user is too far right on screen, but due to mirror view, tell them to move right)
+    const hMag = getMagnitudeWord(dx);
+    if (hMag !== null) {
+      const hDir = dx > 0 ? 'right' : 'left';
+      directions.push(`${hMag} ${hDir}`.trim());
+    }
+
+    // Vertical direction (no flip needed)
+    const vMag = getMagnitudeWord(dy);
+    if (vMag !== null) {
+      const vDir = dy > 0 ? 'up' : 'down';
+      directions.push(`${vMag} ${vDir}`.trim());
+    }
+
+    if (directions.length === 0) return 'Good position!';
+
+    // Format based on body part type
+    const isArm = jointName.includes('wrist') || jointName.includes('elbow');
+    const isLeg = jointName.includes('knee') || jointName.includes('ankle');
+    const isHead = jointName.includes('nose') || jointName.includes('eye') || jointName.includes('ear');
+
+    let action = 'Move';
+    if (isHead) action = 'Tilt';
+    else if (isArm) action = 'Move';
+    else if (isLeg) action = 'Move';
+
+    return `${action} ${directions.join(' and ')}`;
+  };
+
+  /**
+   * Compare current user pose with reference pose
+   */
+  const comparePoses = (userLandmarks, refLandmarks) => {
+    const userNormalized = normalizePose(userLandmarks);
+    const refNormalized = normalizePose(refLandmarks);
+
+    if (!userNormalized || !refNormalized) return null;
+
+    return calculateJointSimilarity(userNormalized, refNormalized);
+  };
+
+  /**
+   * Aggregate frame scores and calculate top 10 improvements with recommendations
+   */
+  const aggregateScores = () => {
+    const currentTime = Date.now();
+
+    // Only aggregate every second
+    if (currentTime - lastAggregateTimeRef.current < 1000) return;
+
+    if (frameScoresRef.current.length === 0) {
+      lastAggregateTimeRef.current = currentTime;
+      return;
+    }
+
+    // Average scores and directions across all frames
+    const jointTotals = {};
+    const jointCounts = {};
+    const jointDxTotals = {};
+    const jointDyTotals = {};
+
+    frameScoresRef.current.forEach(frameScore => {
+      Object.entries(frameScore).forEach(([joint, data]) => {
+        if (!jointTotals[joint]) {
+          jointTotals[joint] = 0;
+          jointCounts[joint] = 0;
+          jointDxTotals[joint] = 0;
+          jointDyTotals[joint] = 0;
+        }
+        jointTotals[joint] += data.score;
+        jointDxTotals[joint] += data.dx;
+        jointDyTotals[joint] += data.dy;
+        jointCounts[joint] += 1;
+      });
+    });
+
+    // Calculate averages
+    const avgScores = {};
+    const avgDx = {};
+    const avgDy = {};
+    Object.keys(jointTotals).forEach(joint => {
+      avgScores[joint] = Math.round((jointTotals[joint] / jointCounts[joint]) * 10) / 10;
+      avgDx[joint] = jointDxTotals[joint] / jointCounts[joint];
+      avgDy[joint] = jointDyTotals[joint] / jointCounts[joint];
+    });
+
+    // Sort by score (lowest = needs most improvement)
+    const sortedJoints = Object.entries(avgScores).sort((a, b) => a[1] - b[1]);
+
+    // Get top 10 areas needing improvement with directional recommendations
+    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => ({
+      joint: jointName,
+      name: BODY_PART_NAMES[jointName] || jointName,
+      score: score,
+      improvementNeeded: Math.round((100 - score) * 10) / 10,
+      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName)
+    }));
+
+    // Calculate overall score
+    // Weighted overall (harsher because critical joints weigh more)
+    let weightedTotal = 0;
+    let weightSum = 0;
+    Object.entries(avgScores).forEach(([joint, score]) => {
+      const w = JOINT_WEIGHTS[joint] || 1;
+      weightedTotal += score * w;
+      weightSum += w;
+    });
+    const overall = weightSum > 0
+      ? Math.round((weightedTotal / weightSum) * 10) / 10
+      : 0;
+
+    setTopImprovements(improvements);
+    setOverallScore(overall);
+    lastAggregatedRef.current = { improvements, overall };
+
+    // Clear scores for next second
+    frameScoresRef.current = [];
+    lastAggregateTimeRef.current = currentTime;
+  };
+
+  /**
+   * Handle reference pose from video player
+   */
+  const handleReferencePose = (landmarks, timestamp) => {
+    setReferencePose(landmarks);
+    setReferenceTime(timestamp ?? null);
+
+    if (landmarks && typeof timestamp === 'number') {
+      referencePoseHistory.current.push({ timestamp, pose: landmarks });
+      const cutoff = timestamp - 3; // Keep last 3 seconds of reference poses
+      referencePoseHistory.current = referencePoseHistory.current.filter(
+        entry => entry.timestamp >= cutoff
+      );
+    }
+  };
+
+  /**
    * Start video playback via ref callback
    */
   const startVideo = () => {
@@ -295,14 +682,6 @@ export const usePoseDetectorController = () => {
    */
   const togglePerformanceMonitor = () => {
     setShowPerformanceMonitor(!showPerformanceMonitor);
-  };
-
-  const togglePerformanceMonitorSize = () => {
-    setIsPerformanceMonitorMinimized(prev => !prev);
-  };
-
-  const handleAudioBeat = (beat) => {
-    setAudioBeat(beat);
   };
 
   /**
@@ -721,6 +1100,48 @@ export const usePoseDetectorController = () => {
     }
   }, [handLandmarks, isReady, videoPlaying, gestureStartTime, referenceVideo, gestureControlEnabled]);
 
+  /**
+   * Compare user pose with reference pose every frame
+   * Aggregate and calculate improvements every second
+   */
+  useEffect(() => {
+    if (!videoPlaying || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
+      // Clear improvements when video stops
+      if (!videoPlaying) {
+        if (topImprovements.length > 0) {
+          setTopImprovements([]);
+          setOverallScore(null);
+          frameScoresRef.current = [];
+        }
+        setLiveFeedback({ timing: null, cues: [] });
+        // Capture final summary when playback stops
+        if (lastAggregatedRef.current && lastAggregatedRef.current.improvements.length > 0) {
+          setFinalImprovements(lastAggregatedRef.current.improvements.slice(0, 5));
+          setFinalScore(lastAggregatedRef.current.overall);
+        }
+      }
+      return;
+    }
+
+    const bestMatch = findBestReferenceMatch(bodyLandmarks);
+    if (bestMatch) {
+      setLiveFeedback({
+        timing: getTimingFeedback(bestMatch),
+        cues: buildDirectionalCues(bestMatch),
+        matchScore: Math.round(bestMatch.avgScore)
+      });
+    }
+
+    // Compare poses for this frame
+    const frameScore = comparePoses(bodyLandmarks, referencePose);
+    if (frameScore && Object.keys(frameScore).length > 0) {
+      frameScoresRef.current.push(frameScore);
+    }
+
+    // Aggregate scores every second
+    aggregateScores();
+  }, [bodyLandmarks, referencePose, videoPlaying]);
+
   // Return all state and functions needed by the View
   return {
     videoRef,
@@ -751,8 +1172,13 @@ export const usePoseDetectorController = () => {
     toggleCamera,
     // Performance monitor
     showPerformanceMonitor,
-    togglePerformanceMonitorSize,
-    audioBeat,
-    handleAudioBeat,
+    togglePerformanceMonitor,
+    // Pose comparison
+    topImprovements,
+    overallScore,
+    finalImprovements,
+    finalScore,
+    liveFeedback,
+    handleReferencePose
   };
 };

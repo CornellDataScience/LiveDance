@@ -7,7 +7,7 @@ import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonSt
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onBeat }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -259,15 +259,18 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           body: formData
         });
 
-        let poseData = {};
         if (response.ok) {
-          poseData = await response.json();
+          const poseData = await response.json();
+          // Draw skeleton
+          drawSkeleton(poseData);
+          // Pass reference pose to parent for comparison
+          if (onReferencePose && poseData.body) {
+            const videoTime = videoRef.current ? videoRef.current.currentTime : 0;
+            onReferencePose(poseData.body, videoTime);
+          }
         }
-        // Draw skeleton
-        drawSkeleton(poseData);
       } catch (error) {
         console.error('Reference video pose detection error:', error);
-        drawSkeleton({}); // Clear canvas on error
       }
     }
 
@@ -316,47 +319,6 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       };
     }
   }, [selectedVideo, showSkeleton]);
-
-  useEffect(() => {
-    if (selectedVideo && videoRef.current && onBeat) {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioContext.createMediaElementSource(videoRef.current);
-      const analyser = audioContext.createAnalyser();
-      
-      analyser.fftSize = 256;
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      source.connect(analyser);
-      analyser.connect(audioContext.destination);
-
-      let lastBeat = 0;
-      const beatThreshold = 200; // Adjust this value
-      const beatCooldown = 500; // ms
-
-      const detectBeat = () => {
-        analyser.getByteFrequencyData(dataArray);
-        
-        // Simple beat detection: check energy in the bass frequencies
-        const bassEnergy = dataArray.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
-        
-        const now = Date.now();
-        if (bassEnergy > beatThreshold && now - lastBeat > beatCooldown) {
-          onBeat(true);
-          lastBeat = now;
-        } else {
-          onBeat(false);
-        }
-        
-        requestAnimationFrame(detectBeat);
-      };
-
-      videoRef.current.onplay = () => {
-        audioContext.resume();
-        detectBeat();
-      };
-    }
-  }, [selectedVideo, onBeat]);
 
   return (
     <div style={{

@@ -1,40 +1,6 @@
 import React from 'react';
 import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
-import NeuroShaderCanvas from '../components/NeuroShaderCanvas';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
-
-const styles = {
-  mainContainer: {
-    minHeight: '100vh',
-    color: 'rgba(255, 255, 255, 0.9)',
-    padding: '40px 20px',
-    fontFamily: "'Poppins', sans-serif",
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  content: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  header: {
-    textAlign: 'center',
-    marginBottom: '40px',
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: '52px',
-    fontWeight: '700',
-    margin: '0 0 10px 0',
-    letterSpacing: '1px',
-    textShadow: '0 0 15px rgba(0, 170, 255, 0.5)',
-  },
-  subtitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: '20px',
-    margin: 0,
-    fontWeight: 300,
-  },
-};
 
 /**
  * View: Pure UI component for pose detection display
@@ -66,18 +32,114 @@ const PoseDetectorView = ({
   toggleCamera,
   showPerformanceMonitor,
   togglePerformanceMonitor,
-  audioBeat,
-  handleAudioBeat
+  topImprovements,
+  overallScore,
+  finalImprovements,
+  finalScore,
+  liveFeedback,
+  handleReferencePose
 }) => {
-    return (
-      <div style={styles.mainContainer}>
-        <NeuroShaderCanvas audioBeat={audioBeat} />
-        <div style={styles.content}>
-          {/* Header */}
-          <div style={styles.header}>
-            <h1 style={styles.title}>LiveDance</h1>
-            <p style={styles.subtitle}>Real-time Motion Capture & Analysis</p>
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '40px 20px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <h1 style={{ 
+          color: 'white',
+          fontSize: '42px',
+          fontWeight: '700',
+          margin: '0 0 10px 0',
+          letterSpacing: '-1px'
+        }}>
+          LiveDance
+        </h1>
+        <p style={{ 
+          color: 'rgba(255, 255, 255, 0.9)',
+          fontSize: '18px',
+          margin: 0
+        }}>
+          Full body tracking with real-time feedback
+        </p>
+      </div>
+
+      {/* Live Feedback Banner */}
+      {isReady && liveFeedback && (liveFeedback.timing || (liveFeedback.cues && liveFeedback.cues.length > 0)) && (
+        <div style={{
+          maxWidth: '900px',
+          margin: '0 auto 20px',
+          background: 'rgba(0, 0, 0, 0.2)',
+          border: '1px solid rgba(255, 255, 255, 0.25)',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
+          color: 'white'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span role="img" aria-label="sparkles">✨</span>
+              Live Dance Coach
+            </div>
+            {liveFeedback.matchScore && (
+              <div style={{
+                padding: '8px 12px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.12)',
+                fontWeight: '600',
+                fontSize: '13px'
+              }}>
+                Match Score: {liveFeedback.matchScore}%
+              </div>
+            )}
           </div>
+          {liveFeedback.timing && (
+            <div style={{
+              marginBottom: liveFeedback.cues && liveFeedback.cues.length > 0 ? '12px' : '0',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              background: liveFeedback.timing.status === 'late'
+                ? 'rgba(245, 101, 101, 0.25)'
+                : liveFeedback.timing.status === 'early'
+                  ? 'rgba(237, 137, 54, 0.25)'
+                  : 'rgba(72, 187, 120, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              fontWeight: '600'
+            }}>
+              {liveFeedback.timing.message}
+            </div>
+          )}
+          {liveFeedback.cues && liveFeedback.cues.length > 0 && (
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {liveFeedback.cues.map((cue) => (
+                <div key={cue.joint} style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  minWidth: '180px'
+                }}>
+                  <div style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>
+                    {cue.name}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)' }}>
+                    {cue.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Performance Monitor */}
       {isReady && (
         <div style={{
@@ -361,7 +423,7 @@ const PoseDetectorView = ({
             onVideoSelect={handleReferenceVideoSelect}
             videoPlayerControlRef={videoPlayerControlRef}
             setVideoPlaying={setVideoPlaying}
-            onBeat={handleAudioBeat}
+            onReferencePose={handleReferencePose}
           />
         </div>
 
@@ -478,6 +540,212 @@ const PoseDetectorView = ({
           </div>
         </div>
       </div>
+
+      {/* Top 10 Improvements Panel */}
+      {isReady && topImprovements && topImprovements.length > 0 && (
+        <div style={{
+          maxWidth: '1400px',
+          margin: '20px auto 0'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '24px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: 'white',
+                fontSize: '20px',
+                fontWeight: '600'
+              }}>
+                Areas to Improve
+              </h3>
+              {overallScore !== null && (
+                <div style={{
+                  background: overallScore >= 80 ? 'rgba(72, 187, 120, 0.3)' :
+                             overallScore >= 60 ? 'rgba(237, 137, 54, 0.3)' :
+                             'rgba(245, 101, 101, 0.3)',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '16px'
+                }}>
+                  Overall Score: {overallScore}%
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+              gap: '12px'
+            }}>
+              {topImprovements.map((item, idx) => (
+                <div key={item.joint} style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{
+                      color: 'white',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}>
+                      #{idx + 1} {item.name}
+                    </span>
+                    <span style={{
+                      color: item.score >= 80 ? '#48bb78' :
+                             item.score >= 60 ? '#ed8936' :
+                             '#f56565',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}>
+                      {item.score}%
+                    </span>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '4px',
+                    height: '6px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${item.score}%`,
+                      height: '100%',
+                      background: item.score >= 80 ? '#48bb78' :
+                                  item.score >= 60 ? '#ed8936' :
+                                  '#f56565',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontStyle: 'italic'
+                  }}>
+                    {item.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Summary (end-of-video) */}
+      {!videoPlaying && finalImprovements && finalImprovements.length > 0 && (
+        <div style={{
+          maxWidth: '900px',
+          margin: '20px auto 0'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '20px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: 'white',
+                fontSize: '18px',
+                fontWeight: '700'
+              }}>
+                Session Feedback: Top 5 Areas to Improve
+              </h3>
+              {finalScore !== null && (
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}>
+                  Overall: {finalScore}%
+                </div>
+              )}
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: '12px'
+            }}>
+              {finalImprovements.slice(0, 5).map((item, idx) => (
+                <div key={item.joint} style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '14px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '6px'
+                  }}>
+                    <span style={{ color: 'white', fontWeight: '600', fontSize: '13px' }}>
+                      #{idx + 1} {item.name}
+                    </span>
+                    <span style={{
+                      color: item.score >= 80 ? '#48bb78' :
+                             item.score >= 60 ? '#ed8936' :
+                             '#f56565',
+                      fontWeight: '700',
+                      fontSize: '13px'
+                    }}>
+                      {item.score}%
+                    </span>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    borderRadius: '4px',
+                    height: '6px',
+                    overflow: 'hidden',
+                    marginBottom: '8px'
+                  }}>
+                    <div style={{
+                      width: `${item.score}%`,
+                      height: '100%',
+                      background: item.score >= 80 ? '#48bb78' :
+                                  item.score >= 60 ? '#ed8936' :
+                                  '#f56565'
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.9)' }}>
+                    {item.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Data Display Panel (below videos) */}
       {isReady && (
@@ -811,7 +1079,6 @@ const PoseDetectorView = ({
         </div>
       )}
 
-      </div>
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
@@ -823,4 +1090,3 @@ const PoseDetectorView = ({
 };
 
 export default PoseDetectorView;
-
