@@ -34,6 +34,9 @@ const PoseDetectorView = ({
   togglePerformanceMonitor,
   topImprovements,
   overallScore,
+  finalImprovements,
+  finalScore,
+  liveFeedback,
   handleReferencePose
 }) => {
   return (
@@ -62,6 +65,80 @@ const PoseDetectorView = ({
           Full body tracking with real-time feedback
         </p>
       </div>
+
+      {/* Live Feedback Banner */}
+      {isReady && liveFeedback && (liveFeedback.timing || (liveFeedback.cues && liveFeedback.cues.length > 0)) && (
+        <div style={{
+          maxWidth: '900px',
+          margin: '0 auto 20px',
+          background: 'rgba(0, 0, 0, 0.2)',
+          border: '1px solid rgba(255, 255, 255, 0.25)',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
+          color: 'white'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span role="img" aria-label="sparkles">✨</span>
+              Live Dance Coach
+            </div>
+            {liveFeedback.matchScore && (
+              <div style={{
+                padding: '8px 12px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.12)',
+                fontWeight: '600',
+                fontSize: '13px'
+              }}>
+                Match Score: {liveFeedback.matchScore}%
+              </div>
+            )}
+          </div>
+          {liveFeedback.timing && (
+            <div style={{
+              marginBottom: liveFeedback.cues && liveFeedback.cues.length > 0 ? '12px' : '0',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              background: liveFeedback.timing.status === 'late'
+                ? 'rgba(245, 101, 101, 0.25)'
+                : liveFeedback.timing.status === 'early'
+                  ? 'rgba(237, 137, 54, 0.25)'
+                  : 'rgba(72, 187, 120, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              fontWeight: '600'
+            }}>
+              {liveFeedback.timing.message}
+            </div>
+          )}
+          {liveFeedback.cues && liveFeedback.cues.length > 0 && (
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {liveFeedback.cues.map((cue) => (
+                <div key={cue.joint} style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  minWidth: '180px'
+                }}>
+                  <div style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>
+                    {cue.name}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)' }}>
+                    {cue.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Performance Monitor */}
       {isReady && (
@@ -573,6 +650,103 @@ const PoseDetectorView = ({
         </div>
       )}
 
+      {/* Session Summary (end-of-video) */}
+      {!videoPlaying && finalImprovements && finalImprovements.length > 0 && (
+        <div style={{
+          maxWidth: '900px',
+          margin: '20px auto 0'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            padding: '20px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: 'white',
+                fontSize: '18px',
+                fontWeight: '700'
+              }}>
+                Session Feedback: Top 5 Areas to Improve
+              </h3>
+              {finalScore !== null && (
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}>
+                  Overall: {finalScore}%
+                </div>
+              )}
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: '12px'
+            }}>
+              {finalImprovements.slice(0, 5).map((item, idx) => (
+                <div key={item.joint} style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '14px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '6px'
+                  }}>
+                    <span style={{ color: 'white', fontWeight: '600', fontSize: '13px' }}>
+                      #{idx + 1} {item.name}
+                    </span>
+                    <span style={{
+                      color: item.score >= 80 ? '#48bb78' :
+                             item.score >= 60 ? '#ed8936' :
+                             '#f56565',
+                      fontWeight: '700',
+                      fontSize: '13px'
+                    }}>
+                      {item.score}%
+                    </span>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    borderRadius: '4px',
+                    height: '6px',
+                    overflow: 'hidden',
+                    marginBottom: '8px'
+                  }}>
+                    <div style={{
+                      width: `${item.score}%`,
+                      height: '100%',
+                      background: item.score >= 80 ? '#48bb78' :
+                                  item.score >= 60 ? '#ed8936' :
+                                  '#f56565'
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.9)' }}>
+                    {item.recommendation}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Data Display Panel (below videos) */}
       {isReady && (
         <div style={{
@@ -916,4 +1090,3 @@ const PoseDetectorView = ({
 };
 
 export default PoseDetectorView;
-

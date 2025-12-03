@@ -265,7 +265,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           drawSkeleton(poseData);
           // Pass reference pose to parent for comparison
           if (onReferencePose && poseData.body) {
-            onReferencePose(poseData.body);
+            const videoTime = videoRef.current ? videoRef.current.currentTime : 0;
+            onReferencePose(poseData.body, videoTime);
           }
         }
       } catch (error) {

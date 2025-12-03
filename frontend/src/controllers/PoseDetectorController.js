@@ -65,10 +65,32 @@ export const usePoseDetectorController = () => {
 
   // Pose comparison state
   const [referencePose, setReferencePose] = useState(null);
+  const [referenceTime, setReferenceTime] = useState(null);
   const [topImprovements, setTopImprovements] = useState([]);
   const [overallScore, setOverallScore] = useState(null);
+  const [liveFeedback, setLiveFeedback] = useState({ timing: null, cues: [] });
+  const [finalImprovements, setFinalImprovements] = useState([]);
+  const [finalScore, setFinalScore] = useState(null);
   const frameScoresRef = useRef([]);
   const lastAggregateTimeRef = useRef(Date.now());
+  const referencePoseHistory = useRef([]);
+  const lastAggregatedRef = useRef({ improvements: [], overall: null });
+  // Minimum joints required to compute a score; keep strict but not so strict that we drop all frames
+  const MIN_VISIBLE_JOINTS = 10;
+  const JOINT_WEIGHTS = {
+    left_shoulder: 1.3,
+    right_shoulder: 1.3,
+    left_elbow: 1.3,
+    right_elbow: 1.3,
+    left_wrist: 1.4,
+    right_wrist: 1.4,
+    left_hip: 1.1,
+    right_hip: 1.1,
+    left_knee: 1.2,
+    right_knee: 1.2,
+    left_ankle: 1.2,
+    right_ankle: 1.2
+  };
 
   // Human-readable names for body parts
   const BODY_PART_NAMES = {
@@ -238,6 +260,10 @@ export const usePoseDetectorController = () => {
   const normalizePose = (landmarks) => {
     if (!landmarks || landmarks.length < 17) return null;
 
+    // Confidence check slightly relaxed to avoid dropping too many frames
+    const visibleCount = landmarks.filter(lm => lm.visible && lm.confidence > 50).length;
+    if (visibleCount < MIN_VISIBLE_JOINTS) return null;
+
     const leftShoulder = landmarks.find(lm => lm.name === 'left_shoulder');
     const rightShoulder = landmarks.find(lm => lm.name === 'right_shoulder');
 
@@ -278,10 +304,13 @@ export const usePoseDetectorController = () => {
         const dx = userPose[jointName].x - refPose[jointName].x;
         const dy = userPose[jointName].y - refPose[jointName].y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        // Convert to similarity score (0-100)
-        const similarity = 100 * Math.exp(-distance);
+        // Harsher decay on distance
+        const decayFactor = 2.5;
+        const similarity = 100 * Math.exp(-distance * decayFactor);
+        const weight = JOINT_WEIGHTS[jointName] || 1;
+
         similarities[jointName] = {
-          score: Math.round(similarity * 10) / 10,
+          score: Math.round(similarity * weight * 10) / 10,
           dx: dx,
           dy: dy
         };
@@ -289,6 +318,127 @@ export const usePoseDetectorController = () => {
     });
 
     return similarities;
+  };
+
+  /**
+   * Find best matching reference frame to understand timing alignment
+   */
+  const findBestReferenceMatch = (userLandmarks) => {
+    const userNormalized = normalizePose(userLandmarks);
+    if (!userNormalized || referencePoseHistory.current.length === 0) return null;
+
+    let best = null;
+    referencePoseHistory.current.forEach(entry => {
+      const refNormalized = normalizePose(entry.pose);
+      if (!refNormalized) return;
+
+      const jointData = calculateJointSimilarity(userNormalized, refNormalized);
+      const scores = Object.values(jointData).map(j => j.score);
+      if (scores.length === 0) return;
+
+      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      if (!best || avgScore > best.avgScore) {
+        best = {
+          avgScore,
+          timestamp: entry.timestamp,
+          joints: jointData,
+          userNormalized
+        };
+      }
+    });
+
+    return best;
+  };
+
+  /**
+   * Determine whether the dancer is early/on time/late
+   */
+  const getTimingFeedback = (bestMatch) => {
+    if (!bestMatch || referencePoseHistory.current.length === 0) return null;
+
+    const latestRef = referencePoseHistory.current[referencePoseHistory.current.length - 1];
+    const prevRef = referencePoseHistory.current.length > 1
+      ? referencePoseHistory.current[referencePoseHistory.current.length - 2]
+      : null;
+
+    if (!latestRef || !latestRef.pose) return null;
+
+    const currentRefNorm = normalizePose(latestRef.pose);
+    const prevRefNorm = prevRef ? normalizePose(prevRef.pose) : null;
+    if (!currentRefNorm) return null;
+
+    const timeDelta = latestRef.timestamp - bestMatch.timestamp;
+
+    if (timeDelta > 0.25) {
+      const rounded = Math.round(timeDelta * 100) / 100;
+      return {
+        status: 'late',
+        delta: rounded,
+        message: `You're about ${rounded}s behind`
+      };
+    }
+
+    // Heuristic: if user progressed further along the motion vector than reference, they're early
+    let aheadVotes = 0;
+    let voteTotal = 0;
+    if (prevRefNorm) {
+      Object.keys(bestMatch.joints).forEach(joint => {
+        if (currentRefNorm[joint] && prevRefNorm[joint] && bestMatch.userNormalized[joint]) {
+          const motion = {
+            x: currentRefNorm[joint].x - prevRefNorm[joint].x,
+            y: currentRefNorm[joint].y - prevRefNorm[joint].y
+          };
+          const motionMagSq = motion.x * motion.x + motion.y * motion.y;
+          if (motionMagSq < 1e-6) return;
+
+          const userOffset = {
+            x: bestMatch.userNormalized[joint].x - currentRefNorm[joint].x,
+            y: bestMatch.userNormalized[joint].y - currentRefNorm[joint].y
+          };
+
+          const projection = (userOffset.x * motion.x + userOffset.y * motion.y) / motionMagSq;
+          if (projection > 0.6) {
+            aheadVotes += 1;
+          }
+          voteTotal += 1;
+        }
+      });
+    }
+
+    if (voteTotal > 0 && aheadVotes / voteTotal > 0.5) {
+      return {
+        status: 'early',
+        delta: 0,
+        message: 'You are slightly ahead—wait a beat'
+      };
+    }
+
+    return {
+      status: 'on-time',
+      delta: 0,
+      message: 'On time—keep the rhythm!'
+    };
+  };
+
+  /**
+   * Build concise directional cues (up/down/left/right) for the user
+   */
+  const buildDirectionalCues = (bestMatch) => {
+    if (!bestMatch || !bestMatch.joints) return [];
+
+    const sorted = Object.entries(bestMatch.joints)
+      .sort((a, b) => a[1].score - b[1].score)
+      .slice(0, 3);
+
+    return sorted.map(([jointName, data]) => {
+      const recommendation = getDirectionalRecommendation(data.dx, data.dy, jointName);
+      return {
+        joint: jointName,
+        name: BODY_PART_NAMES[jointName] || jointName,
+        recommendation,
+        score: Math.round(data.score)
+      };
+    }).filter(item => item.recommendation && item.recommendation !== 'Good position!');
   };
 
   /**
@@ -405,13 +555,21 @@ export const usePoseDetectorController = () => {
     }));
 
     // Calculate overall score
-    const scores = Object.values(avgScores);
-    const overall = scores.length > 0
-      ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+    // Weighted overall (harsher because critical joints weigh more)
+    let weightedTotal = 0;
+    let weightSum = 0;
+    Object.entries(avgScores).forEach(([joint, score]) => {
+      const w = JOINT_WEIGHTS[joint] || 1;
+      weightedTotal += score * w;
+      weightSum += w;
+    });
+    const overall = weightSum > 0
+      ? Math.round((weightedTotal / weightSum) * 10) / 10
       : 0;
 
     setTopImprovements(improvements);
     setOverallScore(overall);
+    lastAggregatedRef.current = { improvements, overall };
 
     // Clear scores for next second
     frameScoresRef.current = [];
@@ -421,8 +579,17 @@ export const usePoseDetectorController = () => {
   /**
    * Handle reference pose from video player
    */
-  const handleReferencePose = (landmarks) => {
+  const handleReferencePose = (landmarks, timestamp) => {
     setReferencePose(landmarks);
+    setReferenceTime(timestamp ?? null);
+
+    if (landmarks && typeof timestamp === 'number') {
+      referencePoseHistory.current.push({ timestamp, pose: landmarks });
+      const cutoff = timestamp - 3; // Keep last 3 seconds of reference poses
+      referencePoseHistory.current = referencePoseHistory.current.filter(
+        entry => entry.timestamp >= cutoff
+      );
+    }
   };
 
   /**
@@ -940,12 +1107,29 @@ export const usePoseDetectorController = () => {
   useEffect(() => {
     if (!videoPlaying || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
       // Clear improvements when video stops
-      if (!videoPlaying && topImprovements.length > 0) {
-        setTopImprovements([]);
-        setOverallScore(null);
-        frameScoresRef.current = [];
+      if (!videoPlaying) {
+        if (topImprovements.length > 0) {
+          setTopImprovements([]);
+          setOverallScore(null);
+          frameScoresRef.current = [];
+        }
+        setLiveFeedback({ timing: null, cues: [] });
+        // Capture final summary when playback stops
+        if (lastAggregatedRef.current && lastAggregatedRef.current.improvements.length > 0) {
+          setFinalImprovements(lastAggregatedRef.current.improvements.slice(0, 5));
+          setFinalScore(lastAggregatedRef.current.overall);
+        }
       }
       return;
+    }
+
+    const bestMatch = findBestReferenceMatch(bodyLandmarks);
+    if (bestMatch) {
+      setLiveFeedback({
+        timing: getTimingFeedback(bestMatch),
+        cues: buildDirectionalCues(bestMatch),
+        matchScore: Math.round(bestMatch.avgScore)
+      });
     }
 
     // Compare poses for this frame
@@ -992,6 +1176,9 @@ export const usePoseDetectorController = () => {
     // Pose comparison
     topImprovements,
     overallScore,
+    finalImprovements,
+    finalScore,
+    liveFeedback,
     handleReferencePose
   };
 };
