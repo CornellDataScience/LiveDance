@@ -34,6 +34,9 @@ const PoseDetectorView = ({
   togglePerformanceMonitor,
   topImprovements,
   overallScore,
+  comparisonActive,
+  startComparison,
+  stopComparison,
   finalImprovements,
   finalScore,
   liveFeedback,
@@ -66,44 +69,50 @@ const PoseDetectorView = ({
         </p>
       </div>
 
-      {/* Live Feedback Banner */}
+      {/* Live Feedback Overlay */}
       {isReady && liveFeedback && (liveFeedback.timing || (liveFeedback.cues && liveFeedback.cues.length > 0)) && (
         <div style={{
-          maxWidth: '900px',
-          margin: '0 auto 20px',
-          background: 'rgba(0, 0, 0, 0.2)',
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 2000,
+          minWidth: '320px',
+          maxWidth: '640px',
+          background: 'rgba(17, 24, 39, 0.8)',
           border: '1px solid rgba(255, 255, 255, 0.25)',
           borderRadius: '16px',
-          padding: '16px 20px',
-          boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
-          color: 'white'
+          padding: '14px 18px',
+          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.35)',
+          color: 'white',
+          backdropFilter: 'blur(12px)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{
-              fontSize: '18px',
+              fontSize: '17px',
               fontWeight: '700',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px'
+              gap: '8px'
             }}>
-              <span role="img" aria-label="sparkles">✨</span>
-              Live Dance Coach
+              <span role="img" aria-label="sparkles">🎮</span>
+              Dance Coach
             </div>
             {liveFeedback.matchScore && (
               <div style={{
-                padding: '8px 12px',
-                borderRadius: '10px',
+                padding: '6px 10px',
+                borderRadius: '8px',
                 background: 'rgba(255, 255, 255, 0.12)',
                 fontWeight: '600',
-                fontSize: '13px'
+                fontSize: '12px'
               }}>
-                Match Score: {liveFeedback.matchScore}%
+                Match: {liveFeedback.matchScore}%
               </div>
             )}
           </div>
           {liveFeedback.timing && (
             <div style={{
-              marginBottom: liveFeedback.cues && liveFeedback.cues.length > 0 ? '12px' : '0',
+              marginBottom: liveFeedback.cues && liveFeedback.cues.length > 0 ? '10px' : '0',
               padding: '10px 12px',
               borderRadius: '10px',
               background: liveFeedback.timing.status === 'late'
@@ -111,28 +120,25 @@ const PoseDetectorView = ({
                 : liveFeedback.timing.status === 'early'
                   ? 'rgba(237, 137, 54, 0.25)'
                   : 'rgba(72, 187, 120, 0.25)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              fontWeight: '600'
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              fontWeight: '700',
+              fontSize: '14px'
             }}>
               {liveFeedback.timing.message}
             </div>
           )}
           {liveFeedback.cues && liveFeedback.cues.length > 0 && (
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              {liveFeedback.cues.map((cue) => (
-                <div key={cue.joint} style={{
-                  padding: '10px 12px',
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {liveFeedback.cues.map((cue, idx) => (
+                <div key={idx} style={{
+                  padding: '8px 10px',
                   borderRadius: '10px',
                   background: 'rgba(255, 255, 255, 0.08)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
-                  minWidth: '180px'
+                  fontSize: '13px',
+                  fontWeight: '600'
                 }}>
-                  <div style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px' }}>
-                    {cue.name}
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.9)' }}>
-                    {cue.recommendation}
-                  </div>
+                  {cue.text}
                 </div>
               ))}
             </div>
@@ -284,6 +290,32 @@ const PoseDetectorView = ({
           justifyContent: 'center',
           flexWrap: 'wrap'
         }}>
+          <button
+            onClick={comparisonActive ? stopComparison : startComparison}
+            style={{
+              padding: '14px 28px',
+              background: comparisonActive ? 'rgba(245, 101, 101, 0.2)' : 'rgba(72, 187, 120, 0.2)',
+              backdropFilter: 'blur(10px)',
+              color: 'white',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '14px',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = comparisonActive ? 'rgba(245, 101, 101, 0.3)' : 'rgba(72, 187, 120, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = comparisonActive ? 'rgba(245, 101, 101, 0.2)' : 'rgba(72, 187, 120, 0.2)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            {comparisonActive ? 'Stop Comparison' : 'Start Comparison'}
+          </button>
           <button
             onClick={toggleDataPanel}
             style={{
@@ -542,7 +574,7 @@ const PoseDetectorView = ({
       </div>
 
       {/* Top 10 Improvements Panel */}
-      {isReady && topImprovements && topImprovements.length > 0 && (
+      {isReady && comparisonActive && topImprovements && topImprovements.length > 0 && (
         <div style={{
           maxWidth: '1400px',
           margin: '20px auto 0'
@@ -651,7 +683,7 @@ const PoseDetectorView = ({
       )}
 
       {/* Session Summary (end-of-video) */}
-      {!videoPlaying && finalImprovements && finalImprovements.length > 0 && (
+      {!comparisonActive && finalImprovements && finalImprovements.length > 0 && (
         <div style={{
           maxWidth: '900px',
           margin: '20px auto 0'

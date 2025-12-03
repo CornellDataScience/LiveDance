@@ -71,6 +71,7 @@ export const usePoseDetectorController = () => {
   const [liveFeedback, setLiveFeedback] = useState({ timing: null, cues: [] });
   const [finalImprovements, setFinalImprovements] = useState([]);
   const [finalScore, setFinalScore] = useState(null);
+  const [comparisonActive, setComparisonActive] = useState(false);
   const frameScoresRef = useRef([]);
   const lastAggregateTimeRef = useRef(Date.now());
   const referencePoseHistory = useRef([]);
@@ -423,22 +424,50 @@ export const usePoseDetectorController = () => {
   /**
    * Build concise directional cues (up/down/left/right) for the user
    */
-  const buildDirectionalCues = (bestMatch) => {
+  const buildDirectionalCues = (bestMatch, timing) => {
     if (!bestMatch || !bestMatch.joints) return [];
 
+    const cues = new Set();
     const sorted = Object.entries(bestMatch.joints)
       .sort((a, b) => a[1].score - b[1].score)
-      .slice(0, 3);
+      .slice(0, 5);
 
-    return sorted.map(([jointName, data]) => {
+    let armIssues = 0;
+    let legIssues = 0;
+
+    sorted.forEach(([jointName, data]) => {
       const recommendation = getDirectionalRecommendation(data.dx, data.dy, jointName);
-      return {
-        joint: jointName,
-        name: BODY_PART_NAMES[jointName] || jointName,
-        recommendation,
-        score: Math.round(data.score)
-      };
-    }).filter(item => item.recommendation && item.recommendation !== 'Good position!');
+      const isArm = jointName.includes('shoulder') || jointName.includes('elbow') || jointName.includes('wrist');
+      const isLeg = jointName.includes('hip') || jointName.includes('knee') || jointName.includes('ankle');
+
+      if (isArm) armIssues += 1;
+      if (isLeg) legIssues += 1;
+
+      if (recommendation && recommendation !== 'Good position!') {
+        if (isArm && cues.size < 3) {
+          if (recommendation.includes('up')) cues.add('Lift your arms higher');
+          else if (recommendation.includes('down')) cues.add('Lower your arms');
+          else if (recommendation.includes('left') || recommendation.includes('right')) cues.add('Align your arms to center');
+          else cues.add('Adjust arm positioning');
+        } else if (isLeg && cues.size < 3) {
+          if (recommendation.includes('up')) cues.add('Raise knees/legs more');
+          else cues.add('Adjust leg alignment');
+        }
+      }
+    });
+
+    if (armIssues >= 2 && cues.size < 3) cues.add('Your arms are trailing—lead with your arms');
+    if (legIssues >= 2 && cues.size < 3) cues.add('Drive more with your legs');
+
+    if (timing && timing.status && cues.size < 3) {
+      if (timing.status === 'late') cues.add('Catch up to the beat');
+      if (timing.status === 'early') cues.add('Slow down slightly');
+    }
+
+    // Fallback if still empty
+    if (cues.size === 0) cues.add('Improve general pace and alignment');
+
+    return Array.from(cues).slice(0, 3).map(text => ({ text }));
   };
 
   /**
@@ -589,6 +618,30 @@ export const usePoseDetectorController = () => {
       referencePoseHistory.current = referencePoseHistory.current.filter(
         entry => entry.timestamp >= cutoff
       );
+    }
+  };
+
+  /**
+   * Start/stop comparison controls
+   */
+  const startComparison = () => {
+    setComparisonActive(true);
+    setTopImprovements([]);
+    setOverallScore(null);
+    setFinalImprovements([]);
+    setFinalScore(null);
+    setLiveFeedback({ timing: null, cues: [] });
+    frameScoresRef.current = [];
+    lastAggregatedRef.current = { improvements: [], overall: null };
+    lastAggregateTimeRef.current = Date.now();
+  };
+
+  const stopComparison = () => {
+    setComparisonActive(false);
+    // Save latest aggregate as final summary even if video not finished
+    if (lastAggregatedRef.current && lastAggregatedRef.current.improvements.length > 0) {
+      setFinalImprovements(lastAggregatedRef.current.improvements.slice(0, 5));
+      setFinalScore(lastAggregatedRef.current.overall);
     }
   };
 
@@ -1105,29 +1158,25 @@ export const usePoseDetectorController = () => {
    * Aggregate and calculate improvements every second
    */
   useEffect(() => {
-    if (!videoPlaying || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
+    if (!comparisonActive || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
       // Clear improvements when video stops
-      if (!videoPlaying) {
+      if (!comparisonActive) {
         if (topImprovements.length > 0) {
           setTopImprovements([]);
           setOverallScore(null);
           frameScoresRef.current = [];
         }
         setLiveFeedback({ timing: null, cues: [] });
-        // Capture final summary when playback stops
-        if (lastAggregatedRef.current && lastAggregatedRef.current.improvements.length > 0) {
-          setFinalImprovements(lastAggregatedRef.current.improvements.slice(0, 5));
-          setFinalScore(lastAggregatedRef.current.overall);
-        }
       }
       return;
     }
 
     const bestMatch = findBestReferenceMatch(bodyLandmarks);
     if (bestMatch) {
+      const timingFeedback = getTimingFeedback(bestMatch);
       setLiveFeedback({
-        timing: getTimingFeedback(bestMatch),
-        cues: buildDirectionalCues(bestMatch),
+        timing: timingFeedback,
+        cues: buildDirectionalCues(bestMatch, timingFeedback),
         matchScore: Math.round(bestMatch.avgScore)
       });
     }
@@ -1176,6 +1225,9 @@ export const usePoseDetectorController = () => {
     // Pose comparison
     topImprovements,
     overallScore,
+    comparisonActive,
+    startComparison,
+    stopComparison,
     finalImprovements,
     finalScore,
     liveFeedback,
