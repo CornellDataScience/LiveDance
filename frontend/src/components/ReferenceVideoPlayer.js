@@ -47,9 +47,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         socketRef.current.on('reference_pose_result', (data) => {
           // Draw skeleton with received pose data
           drawSkeleton(data);
-          // Pass reference pose to parent for comparison
-          if (onReferencePose && data.body) {
-            onReferencePose(data.body);
+          // Pass reference pose to parent for comparison with video timestamp
+          if (onReferencePose && data.body && videoRef.current) {
+            const videoTimestamp = videoRef.current.currentTime;
+            onReferencePose(data.body, videoTimestamp);
           }
         });
       }).catch(err => {
@@ -59,9 +60,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       // Already connected, just add listener
       socketRef.current.on('reference_pose_result', (data) => {
         drawSkeleton(data);
-        // Pass reference pose to parent for comparison
-        if (onReferencePose && data.body) {
-          onReferencePose(data.body);
+        // Pass reference pose to parent for comparison with video timestamp
+        if (onReferencePose && data.body && videoRef.current) {
+          const videoTimestamp = videoRef.current.currentTime;
+          onReferencePose(data.body, videoTimestamp);
         }
       });
     }

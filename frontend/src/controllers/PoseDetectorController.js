@@ -67,8 +67,15 @@ export const usePoseDetectorController = () => {
   const [referencePose, setReferencePose] = useState(null);
   const [topImprovements, setTopImprovements] = useState([]);
   const [overallScore, setOverallScore] = useState(null);
+  const [timingFeedback, setTimingFeedback] = useState(null);  // Timing offset feedback
   const frameScoresRef = useRef([]);
   const lastAggregateTimeRef = useRef(Date.now());
+
+  // Sliding window configuration for timing tolerance
+  const TIME_WINDOW_MS = 500;  // ±500ms tolerance for timing (±30 frames at 60 FPS)
+  const MAX_TIMING_PENALTY = 10;  // Maximum points deducted for timing offset
+  const referencePoseBufferRef = useRef([]);  // Buffer of recent reference poses with timestamps
+  const MAX_BUFFER_SIZE = 120;  // Keep last 2 seconds at 60 FPS
 
   // Game session state
   const [gameSessionActive, setGameSessionActive] = useState(false);
@@ -111,6 +118,44 @@ export const usePoseDetectorController = () => {
     'right_knee': 'Right Knee',
     'left_ankle': 'Left Ankle',
     'right_ankle': 'Right Ankle',
+  };
+
+  // Importance weights for each joint in pose comparison
+  // Higher weight = more important for dance quality
+  // Optimized for dance styles like K-pop, hip-hop, and TikTok dances
+  const JOINT_WEIGHTS = {
+    // Upper body - most visible and expressive
+    'left_wrist': 1.5,      // Most important - hand positions are most noticeable
+    'right_wrist': 1.5,
+    'left_elbow': 1.3,      // Very important - controls arm shape
+    'right_elbow': 1.3,
+    'left_shoulder': 1.4,   // Very important - defines posture and frame
+    'right_shoulder': 1.4,
+
+    // Core - foundation of the pose
+    'left_hip': 1.4,        // Very important - defines stance
+    'right_hip': 1.4,
+
+    // Lower body - important but less expressive
+    'left_knee': 1.2,       // Important - controls leg position
+    'right_knee': 1.2,
+    'left_ankle': 1.0,      // Neutral - feet placement
+    'right_ankle': 1.0,
+
+    // Head - usually follows body, less critical
+    'nose': 0.8,            // Minor importance
+    'left_eye': 0.6,        // Very minor - usually just tracks with head
+    'right_eye': 0.6,
+    'left_ear': 0.6,
+    'right_ear': 0.6
+  };
+
+  // Importance level thresholds for feedback
+  const IMPORTANCE_LEVELS = {
+    CRITICAL: 1.4,   // >= 1.4
+    HIGH: 1.2,       // >= 1.2
+    MEDIUM: 1.0,     // >= 1.0
+    LOW: 0.0         // < 1.0
   };
 
   // Performance metrics state
@@ -387,6 +432,18 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Get importance level for a joint based on its weight
+   */
+  const getImportanceLevel = (jointName) => {
+    const weight = JOINT_WEIGHTS[jointName] || 1.0;
+
+    if (weight >= IMPORTANCE_LEVELS.CRITICAL) return 'CRITICAL';
+    if (weight >= IMPORTANCE_LEVELS.HIGH) return 'HIGH';
+    if (weight >= IMPORTANCE_LEVELS.MEDIUM) return 'MEDIUM';
+    return 'LOW';
+  };
+
+  /**
    * Compare current user pose with reference pose
    */
   const comparePoses = (userLandmarks, refLandmarks) => {
@@ -417,9 +474,20 @@ export const usePoseDetectorController = () => {
     const jointCounts = {};
     const jointDxTotals = {};
     const jointDyTotals = {};
+    let timingOffsetTotal = 0;
+    let timingOffsetCount = 0;
 
     frameScoresRef.current.forEach(frameScore => {
+      // Track timing offset from sliding window matching
+      if (frameScore._timingOffsetMs !== undefined) {
+        timingOffsetTotal += frameScore._timingOffsetMs;
+        timingOffsetCount++;
+      }
+
       Object.entries(frameScore).forEach(([joint, data]) => {
+        // Skip metadata fields (starting with _)
+        if (joint.startsWith('_')) return;
+
         if (!jointTotals[joint]) {
           jointTotals[joint] = 0;
           jointCounts[joint] = 0;
@@ -432,6 +500,11 @@ export const usePoseDetectorController = () => {
         jointCounts[joint] += 1;
       });
     });
+
+    // Calculate average timing offset
+    const avgTimingOffset = timingOffsetCount > 0
+      ? Math.round(timingOffsetTotal / timingOffsetCount)
+      : 0;
 
     // Calculate averages
     const avgScores = {};
@@ -452,17 +525,40 @@ export const usePoseDetectorController = () => {
       name: BODY_PART_NAMES[jointName] || jointName,
       score: score,
       improvementNeeded: Math.round((100 - score) * 10) / 10,
-      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName)
+      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName),
+      weight: JOINT_WEIGHTS[jointName] || 1.0,
+      importance: getImportanceLevel(jointName)
     }));
 
-    // Calculate overall score
-    const scores = Object.values(avgScores);
-    const overall = scores.length > 0
-      ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+    // Calculate overall score using weighted mean
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    Object.entries(avgScores).forEach(([joint, score]) => {
+      const weight = JOINT_WEIGHTS[joint] || 1.0;  // Default to 1.0 if joint not in weights
+      weightedSum += score * weight;
+      totalWeight += weight;
+    });
+
+    const overall = totalWeight > 0
+      ? Math.round((weightedSum / totalWeight) * 10) / 10
       : 0;
 
     setTopImprovements(improvements);
     setOverallScore(overall);
+
+    // Set timing feedback if there's a significant offset
+    if (Math.abs(avgTimingOffset) > 100) {  // Only show if >100ms offset
+      const direction = avgTimingOffset > 0 ? 'ahead' : 'behind';
+      const offsetAbs = Math.abs(avgTimingOffset);
+      setTimingFeedback({
+        offsetMs: avgTimingOffset,
+        message: `You're ${offsetAbs}ms ${direction} the video`,
+        severity: offsetAbs > 300 ? 'high' : 'medium'
+      });
+    } else {
+      setTimingFeedback(null);  // Clear if timing is good
+    }
 
     // Game session classification tracking - only when video is playing
     if (gameSessionActive && videoPlaying && overall !== null) {
@@ -506,10 +602,75 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Handle reference pose from video player
+   * Compare user pose with reference poses in a time window
+   * Returns best match within ±TIME_WINDOW_MS to handle reaction time
    */
-  const handleReferencePose = (landmarks) => {
+  const comparePoseWithTimeWindow = (userLandmarks, currentVideoTime) => {
+    if (!userLandmarks || userLandmarks.length === 0) return null;
+    if (referencePoseBufferRef.current.length === 0) return null;
+
+    const timeWindowSec = TIME_WINDOW_MS / 1000;  // Convert to seconds
+    let bestScore = null;
+    let bestTimingOffset = 0;
+    let bestRefPose = null;
+
+    // Search through reference poses in time window
+    referencePoseBufferRef.current.forEach(refEntry => {
+      const timeDiff = Math.abs(refEntry.timestamp - currentVideoTime);
+
+      // Only consider poses within the time window
+      if (timeDiff <= timeWindowSec) {
+        // Compare poses
+        const frameScore = comparePoses(userLandmarks, refEntry.landmarks);
+
+        if (frameScore && Object.keys(frameScore).length > 0) {
+          // Calculate average score for this comparison
+          const scores = Object.values(frameScore).map(joint => joint.score);
+          const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+          // Apply timing penalty (less penalty for smaller time differences)
+          const timingPenalty = (timeDiff / timeWindowSec) * MAX_TIMING_PENALTY;
+          const adjustedScore = avgScore - timingPenalty;
+
+          // Keep track of best match
+          if (bestScore === null || adjustedScore > bestScore) {
+            bestScore = adjustedScore;
+            bestTimingOffset = refEntry.timestamp - currentVideoTime;
+            bestRefPose = frameScore;
+          }
+        }
+      }
+    });
+
+    // Add timing metadata to the best match
+    if (bestRefPose) {
+      bestRefPose._timingOffset = bestTimingOffset;
+      bestRefPose._timingOffsetMs = Math.round(bestTimingOffset * 1000);
+    }
+
+    return bestRefPose;
+  };
+
+  /**
+   * Handle reference pose from video player
+   * Adds pose to buffer with timestamp for sliding window matching
+   */
+  const handleReferencePose = (landmarks, videoTimestamp) => {
+    // Update current reference pose (for backwards compatibility)
     setReferencePose(landmarks);
+
+    // Add to buffer with timestamp
+    if (landmarks && videoTimestamp !== undefined) {
+      referencePoseBufferRef.current.push({
+        landmarks: landmarks,
+        timestamp: videoTimestamp  // Video time in seconds
+      });
+
+      // Limit buffer size (keep last 2 seconds)
+      if (referencePoseBufferRef.current.length > MAX_BUFFER_SIZE) {
+        referencePoseBufferRef.current.shift();  // Remove oldest
+      }
+    }
   };
 
   /**
@@ -904,8 +1065,10 @@ export const usePoseDetectorController = () => {
 
     // Clear pose comparison data for fresh start
     frameScoresRef.current = [];
+    referencePoseBufferRef.current = [];
     setTopImprovements([]);
     setOverallScore(null);
+    setTimingFeedback(null);
 
     // NO COUNTDOWN HERE - wait for video selection
   };
@@ -975,8 +1138,10 @@ export const usePoseDetectorController = () => {
 
     // Clear pose comparison data
     frameScoresRef.current = [];
+    referencePoseBufferRef.current = [];
     setTopImprovements([]);
     setOverallScore(null);
+    setTimingFeedback(null);
   };
 
   /**
@@ -991,8 +1156,10 @@ export const usePoseDetectorController = () => {
 
     // Clear pose comparison data
     frameScoresRef.current = [];
+    referencePoseBufferRef.current = [];
     setTopImprovements([]);
     setOverallScore(null);
+    setTimingFeedback(null);
     setReferencePose(null);
 
     // Reset video playing state
@@ -1022,8 +1189,10 @@ export const usePoseDetectorController = () => {
 
     // Clear all game-related state
     frameScoresRef.current = [];
+    referencePoseBufferRef.current = [];
     setTopImprovements([]);
     setOverallScore(null);
+    setTimingFeedback(null);
     setReferencePose(null);
     setFloatingText(null);
     setCurrentClassification(null);
@@ -1244,21 +1413,31 @@ export const usePoseDetectorController = () => {
 
   /**
    * Compare user pose with reference pose every frame
+   * Uses sliding window matching to handle timing variations (±500ms tolerance)
    * Aggregate and calculate improvements every second
    */
   useEffect(() => {
-    if (!videoPlaying || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
+    if (!videoPlaying || !bodyLandmarks || bodyLandmarks.length === 0) {
       // Clear improvements when video stops
       if (!videoPlaying && topImprovements.length > 0) {
         setTopImprovements([]);
         setOverallScore(null);
+        setTimingFeedback(null);
         frameScoresRef.current = [];
+        referencePoseBufferRef.current = [];
       }
       return;
     }
 
-    // Compare poses for this frame
-    const frameScore = comparePoses(bodyLandmarks, referencePose);
+    // Get current video time from most recent reference pose in buffer
+    if (referencePoseBufferRef.current.length === 0) return;
+
+    const currentVideoTime = referencePoseBufferRef.current[
+      referencePoseBufferRef.current.length - 1
+    ].timestamp;
+
+    // Compare poses using sliding window (finds best match within ±500ms)
+    const frameScore = comparePoseWithTimeWindow(bodyLandmarks, currentVideoTime);
     if (frameScore && Object.keys(frameScore).length > 0) {
       frameScoresRef.current.push(frameScore);
     }
@@ -1301,6 +1480,7 @@ export const usePoseDetectorController = () => {
     // Pose comparison
     topImprovements,
     overallScore,
+    timingFeedback,
     handleReferencePose,
     // Game session
     gameSessionActive,
