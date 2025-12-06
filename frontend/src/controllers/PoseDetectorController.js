@@ -77,6 +77,61 @@ export const usePoseDetectorController = () => {
   const lastAggregatedRef = useRef({ improvements: [], overall: null });
   // Minimum joints required to compute a score; keep strict but not so strict that we drop all frames
   const MIN_VISIBLE_JOINTS = 10;
+
+  // Scoring configuration state
+  const [scoringMode, setScoringMode] = useState('distance'); // 'distance' or 'cosine'
+  const [difficulty, setDifficulty] = useState('medium'); // 'easy', 'medium', 'hard'
+
+  // Difficulty settings with different decay factors
+  const DIFFICULTY_SETTINGS = {
+    easy: {
+      decayFactor: 1.5,
+      label: 'Easy',
+      description: 'Forgiving scoring - great for beginners'
+    },
+    medium: {
+      decayFactor: 2.5,
+      label: 'Medium',
+      description: 'Balanced scoring - standard difficulty'
+    },
+    hard: {
+      decayFactor: 4.0,
+      label: 'Hard',
+      description: 'Strict scoring - for experienced dancers'
+    }
+  };
+
+  // Body segment definitions for cosine similarity (joint connections as vectors)
+  const BODY_SEGMENTS = {
+    left_upper_arm: { start: 'left_shoulder', end: 'left_elbow', name: 'Left Upper Arm' },
+    left_forearm: { start: 'left_elbow', end: 'left_wrist', name: 'Left Forearm' },
+    right_upper_arm: { start: 'right_shoulder', end: 'right_elbow', name: 'Right Upper Arm' },
+    right_forearm: { start: 'right_elbow', end: 'right_wrist', name: 'Right Forearm' },
+    left_thigh: { start: 'left_hip', end: 'left_knee', name: 'Left Thigh' },
+    left_shin: { start: 'left_knee', end: 'left_ankle', name: 'Left Shin' },
+    right_thigh: { start: 'right_hip', end: 'right_knee', name: 'Right Thigh' },
+    right_shin: { start: 'right_knee', end: 'right_ankle', name: 'Right Shin' },
+    shoulders: { start: 'left_shoulder', end: 'right_shoulder', name: 'Shoulder Line' },
+    hips: { start: 'left_hip', end: 'right_hip', name: 'Hip Line' },
+    left_torso: { start: 'left_shoulder', end: 'left_hip', name: 'Left Torso' },
+    right_torso: { start: 'right_shoulder', end: 'right_hip', name: 'Right Torso' }
+  };
+
+  // Weights for body segments in cosine similarity mode
+  const SEGMENT_WEIGHTS = {
+    left_upper_arm: 1.3,
+    left_forearm: 1.4,
+    right_upper_arm: 1.3,
+    right_forearm: 1.4,
+    left_thigh: 1.2,
+    left_shin: 1.2,
+    right_thigh: 1.2,
+    right_shin: 1.2,
+    shoulders: 1.1,
+    hips: 1.1,
+    left_torso: 1.0,
+    right_torso: 1.0
+  };
   const JOINT_WEIGHTS = {
     left_shoulder: 1.3,
     right_shoulder: 1.3,
@@ -294,18 +349,19 @@ export const usePoseDetectorController = () => {
 
   /**
    * Calculate similarity score for each joint (0-100) with directional data
+   * Uses distance-based exponential decay with configurable difficulty
    */
   const calculateJointSimilarity = (userPose, refPose) => {
     if (!userPose || !refPose) return {};
 
+    const decayFactor = DIFFICULTY_SETTINGS[difficulty].decayFactor;
     const similarities = {};
+
     Object.keys(userPose).forEach(jointName => {
       if (refPose[jointName]) {
         const dx = userPose[jointName].x - refPose[jointName].x;
         const dy = userPose[jointName].y - refPose[jointName].y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        // Harsher decay on distance
-        const decayFactor = 2.5;
         const similarity = 100 * Math.exp(-distance * decayFactor);
         const weight = JOINT_WEIGHTS[jointName] || 1;
 
@@ -321,6 +377,123 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Calculate cosine similarity between two vectors
+   * Returns value between -1 and 1, where 1 means identical direction
+   */
+  const cosineSimilarity = (v1, v2) => {
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+    const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+
+    if (mag1 < 0.001 || mag2 < 0.001) return 0; // Avoid division by zero
+
+    return dot / (mag1 * mag2);
+  };
+
+  /**
+   * Get angle difference between two vectors in degrees
+   */
+  const getAngleDifference = (v1, v2) => {
+    const cos = cosineSimilarity(v1, v2);
+    const angleRad = Math.acos(Math.max(-1, Math.min(1, cos)));
+    return angleRad * (180 / Math.PI);
+  };
+
+  /**
+   * Get directional recommendation for body segment based on angle difference
+   */
+  const getSegmentRecommendation = (userVec, refVec, segmentName) => {
+    const angleDiff = getAngleDifference(userVec, refVec);
+
+    if (angleDiff < 10) return 'Good angle!';
+
+    // Calculate cross product to determine rotation direction
+    const cross = userVec.x * refVec.y - userVec.y * refVec.x;
+    const rotationDir = cross > 0 ? 'counterclockwise' : 'clockwise';
+
+    // Determine magnitude word
+    let magnitude = '';
+    if (angleDiff < 20) magnitude = 'slightly';
+    else if (angleDiff < 40) magnitude = '';
+    else magnitude = 'significantly';
+
+    // Customize recommendation based on body part
+    const isArm = segmentName.includes('Arm') || segmentName.includes('Forearm');
+    const isLeg = segmentName.includes('Thigh') || segmentName.includes('Shin');
+
+    if (isArm) {
+      return `Rotate arm ${magnitude} ${rotationDir} (~${Math.round(angleDiff)}°)`;
+    } else if (isLeg) {
+      return `Adjust leg ${magnitude} ${rotationDir} (~${Math.round(angleDiff)}°)`;
+    } else {
+      return `Rotate ${magnitude} ${rotationDir} (~${Math.round(angleDiff)}°)`;
+    }
+  };
+
+  /**
+   * Calculate cosine similarity for body segments
+   * Compares the direction/angle of body parts rather than absolute positions
+   */
+  const calculateSegmentSimilarity = (userPose, refPose) => {
+    if (!userPose || !refPose) return {};
+
+    const decayFactor = DIFFICULTY_SETTINGS[difficulty].decayFactor;
+    const similarities = {};
+
+    Object.entries(BODY_SEGMENTS).forEach(([segmentKey, segment]) => {
+      const userStart = userPose[segment.start];
+      const userEnd = userPose[segment.end];
+      const refStart = refPose[segment.start];
+      const refEnd = refPose[segment.end];
+
+      if (userStart && userEnd && refStart && refEnd) {
+        // Calculate direction vectors
+        const userVec = {
+          x: userEnd.x - userStart.x,
+          y: userEnd.y - userStart.y
+        };
+        const refVec = {
+          x: refEnd.x - refStart.x,
+          y: refEnd.y - refStart.y
+        };
+
+        // Calculate cosine similarity (-1 to 1) and convert to score (0 to 100)
+        const cos = cosineSimilarity(userVec, refVec);
+        // Map cosine similarity to score: 1 -> 100, 0 -> 50, -1 -> 0
+        // Then apply difficulty-based decay for stricter scoring at higher difficulties
+        const baseScore = ((cos + 1) / 2) * 100;
+        // Apply exponential adjustment based on difficulty (makes mid-range scores harsher)
+        const adjustedScore = 100 * Math.pow(baseScore / 100, decayFactor / 2);
+
+        const weight = SEGMENT_WEIGHTS[segmentKey] || 1;
+        const angleDiff = getAngleDifference(userVec, refVec);
+
+        similarities[segmentKey] = {
+          score: Math.round(adjustedScore * weight * 10) / 10,
+          cosine: Math.round(cos * 1000) / 1000,
+          angleDiff: Math.round(angleDiff * 10) / 10,
+          recommendation: getSegmentRecommendation(userVec, refVec, segment.name),
+          name: segment.name,
+          userVec,
+          refVec
+        };
+      }
+    });
+
+    return similarities;
+  };
+
+  /**
+   * Unified similarity calculation that uses either distance or cosine based on mode
+   */
+  const calculateSimilarity = (userPose, refPose) => {
+    if (scoringMode === 'cosine') {
+      return calculateSegmentSimilarity(userPose, refPose);
+    }
+    return calculateJointSimilarity(userPose, refPose);
+  };
+
+  /**
    * Find best matching reference frame to understand timing alignment
    */
   const findBestReferenceMatch = (userLandmarks) => {
@@ -332,8 +505,8 @@ export const usePoseDetectorController = () => {
       const refNormalized = normalizePose(entry.pose);
       if (!refNormalized) return;
 
-      const jointData = calculateJointSimilarity(userNormalized, refNormalized);
-      const scores = Object.values(jointData).map(j => j.score);
+      const similarityData = calculateSimilarity(userNormalized, refNormalized);
+      const scores = Object.values(similarityData).map(j => j.score);
       if (scores.length === 0) return;
 
       const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -341,7 +514,7 @@ export const usePoseDetectorController = () => {
         best = {
           avgScore,
           timestamp: entry.timestamp,
-          joints: jointData,
+          joints: similarityData,
           userNormalized
         };
       }
@@ -494,7 +667,7 @@ export const usePoseDetectorController = () => {
 
     if (!userNormalized || !refNormalized) return null;
 
-    return calculateJointSimilarity(userNormalized, refNormalized);
+    return calculateSimilarity(userNormalized, refNormalized);
   };
 
   /**
@@ -511,24 +684,39 @@ export const usePoseDetectorController = () => {
       return;
     }
 
-    // Average scores and directions across all frames
-    const jointTotals = {};
-    const jointCounts = {};
-    const jointDxTotals = {};
-    const jointDyTotals = {};
+    // Average scores and directions/angles across all frames
+    const itemTotals = {};
+    const itemCounts = {};
+    const itemDxTotals = {};
+    const itemDyTotals = {};
+    const itemAngleTotals = {};
+    const itemRecommendations = {};
+    const itemNames = {};
 
     frameScoresRef.current.forEach(frameScore => {
-      Object.entries(frameScore).forEach(([joint, data]) => {
-        if (!jointTotals[joint]) {
-          jointTotals[joint] = 0;
-          jointCounts[joint] = 0;
-          jointDxTotals[joint] = 0;
-          jointDyTotals[joint] = 0;
+      Object.entries(frameScore).forEach(([item, data]) => {
+        if (!itemTotals[item]) {
+          itemTotals[item] = 0;
+          itemCounts[item] = 0;
+          itemDxTotals[item] = 0;
+          itemDyTotals[item] = 0;
+          itemAngleTotals[item] = 0;
         }
-        jointTotals[joint] += data.score;
-        jointDxTotals[joint] += data.dx;
-        jointDyTotals[joint] += data.dy;
-        jointCounts[joint] += 1;
+        itemTotals[item] += data.score;
+        itemCounts[item] += 1;
+
+        // Handle distance mode data
+        if (data.dx !== undefined) {
+          itemDxTotals[item] += data.dx;
+          itemDyTotals[item] += data.dy;
+        }
+
+        // Handle cosine mode data
+        if (data.angleDiff !== undefined) {
+          itemAngleTotals[item] += data.angleDiff;
+          itemRecommendations[item] = data.recommendation;
+          itemNames[item] = data.name;
+        }
       });
     });
 
@@ -536,30 +724,47 @@ export const usePoseDetectorController = () => {
     const avgScores = {};
     const avgDx = {};
     const avgDy = {};
-    Object.keys(jointTotals).forEach(joint => {
-      avgScores[joint] = Math.round((jointTotals[joint] / jointCounts[joint]) * 10) / 10;
-      avgDx[joint] = jointDxTotals[joint] / jointCounts[joint];
-      avgDy[joint] = jointDyTotals[joint] / jointCounts[joint];
+    const avgAngles = {};
+    Object.keys(itemTotals).forEach(item => {
+      avgScores[item] = Math.round((itemTotals[item] / itemCounts[item]) * 10) / 10;
+      avgDx[item] = itemDxTotals[item] / itemCounts[item];
+      avgDy[item] = itemDyTotals[item] / itemCounts[item];
+      avgAngles[item] = Math.round((itemAngleTotals[item] / itemCounts[item]) * 10) / 10;
     });
 
     // Sort by score (lowest = needs most improvement)
-    const sortedJoints = Object.entries(avgScores).sort((a, b) => a[1] - b[1]);
+    const sortedItems = Object.entries(avgScores).sort((a, b) => a[1] - b[1]);
 
-    // Get top 10 areas needing improvement with directional recommendations
-    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => ({
-      joint: jointName,
-      name: BODY_PART_NAMES[jointName] || jointName,
-      score: score,
-      improvementNeeded: Math.round((100 - score) * 10) / 10,
-      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName)
-    }));
+    // Get top 10 areas needing improvement with appropriate recommendations
+    const improvements = sortedItems.slice(0, 10).map(([itemName, score]) => {
+      if (scoringMode === 'cosine') {
+        // Cosine mode - use segment names and angle-based recommendations
+        return {
+          joint: itemName,
+          name: itemNames[itemName] || BODY_SEGMENTS[itemName]?.name || itemName,
+          score: score,
+          improvementNeeded: Math.round((100 - score) * 10) / 10,
+          angleDiff: avgAngles[itemName],
+          recommendation: itemRecommendations[itemName] || `Adjust angle (~${avgAngles[itemName]}° off)`
+        };
+      } else {
+        // Distance mode - use joint names and directional recommendations
+        return {
+          joint: itemName,
+          name: BODY_PART_NAMES[itemName] || itemName,
+          score: score,
+          improvementNeeded: Math.round((100 - score) * 10) / 10,
+          recommendation: getDirectionalRecommendation(avgDx[itemName], avgDy[itemName], itemName)
+        };
+      }
+    });
 
-    // Calculate overall score
-    // Weighted overall (harsher because critical joints weigh more)
+    // Calculate overall score with appropriate weights
     let weightedTotal = 0;
     let weightSum = 0;
-    Object.entries(avgScores).forEach(([joint, score]) => {
-      const w = JOINT_WEIGHTS[joint] || 1;
+    const weights = scoringMode === 'cosine' ? SEGMENT_WEIGHTS : JOINT_WEIGHTS;
+    Object.entries(avgScores).forEach(([item, score]) => {
+      const w = weights[item] || 1;
       weightedTotal += score * w;
       weightSum += w;
     });
@@ -1140,7 +1345,7 @@ export const usePoseDetectorController = () => {
 
     // Aggregate scores every second
     aggregateScores();
-  }, [bodyLandmarks, referencePose, videoPlaying]);
+  }, [bodyLandmarks, referencePose, videoPlaying, scoringMode, difficulty]);
 
   // Return all state and functions needed by the View
   return {
@@ -1179,6 +1384,12 @@ export const usePoseDetectorController = () => {
     finalImprovements,
     finalScore,
     liveFeedback,
-    handleReferencePose
+    handleReferencePose,
+    // Scoring configuration
+    scoringMode,
+    setScoringMode,
+    difficulty,
+    setDifficulty,
+    DIFFICULTY_SETTINGS
   };
 };

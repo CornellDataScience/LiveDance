@@ -37,7 +37,13 @@ const PoseDetectorView = ({
   finalImprovements,
   finalScore,
   liveFeedback,
-  handleReferencePose
+  handleReferencePose,
+  // Scoring configuration
+  scoringMode,
+  setScoringMode,
+  difficulty,
+  setDifficulty,
+  DIFFICULTY_SETTINGS
 }) => {
   return (
     <div style={{ 
@@ -398,6 +404,128 @@ const PoseDetectorView = ({
               {gestureControlEnabled ? 'Gesture: ON' : 'Gesture: OFF'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Scoring Configuration Panel */}
+      {isReady && (
+        <div style={{
+          maxWidth: '900px',
+          margin: '0 auto 20px',
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '20px 24px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '20px'
+          }}>
+            {/* Scoring Mode Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>
+                Scoring Mode:
+              </span>
+              <div style={{
+                display: 'flex',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '8px',
+                padding: '4px'
+              }}>
+                <button
+                  onClick={() => setScoringMode('distance')}
+                  style={{
+                    padding: '8px 16px',
+                    background: scoringMode === 'distance' ? 'rgba(255, 255, 255, 0.25)' : 'transparent',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: scoringMode === 'distance' ? '600' : '400',
+                    fontSize: '13px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Position
+                </button>
+                <button
+                  onClick={() => setScoringMode('cosine')}
+                  style={{
+                    padding: '8px 16px',
+                    background: scoringMode === 'cosine' ? 'rgba(255, 255, 255, 0.25)' : 'transparent',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: scoringMode === 'cosine' ? '600' : '400',
+                    fontSize: '13px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Angle
+                </button>
+              </div>
+              <span style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '12px',
+                maxWidth: '200px'
+              }}>
+                {scoringMode === 'distance'
+                  ? 'Compares joint positions'
+                  : 'Compares body segment angles'}
+              </span>
+            </div>
+
+            {/* Difficulty Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>
+                Difficulty:
+              </span>
+              <div style={{
+                display: 'flex',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '8px',
+                padding: '4px'
+              }}>
+                {DIFFICULTY_SETTINGS && Object.entries(DIFFICULTY_SETTINGS).map(([key, settings]) => (
+                  <button
+                    key={key}
+                    onClick={() => setDifficulty(key)}
+                    style={{
+                      padding: '8px 16px',
+                      background: difficulty === key
+                        ? key === 'easy' ? 'rgba(72, 187, 120, 0.4)'
+                        : key === 'medium' ? 'rgba(237, 137, 54, 0.4)'
+                        : 'rgba(245, 101, 101, 0.4)'
+                        : 'transparent',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: difficulty === key ? '600' : '400',
+                      fontSize: '13px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={settings.description}
+                  >
+                    {settings.label}
+                  </button>
+                ))}
+              </div>
+              <span style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '12px',
+                maxWidth: '200px'
+              }}>
+                {DIFFICULTY_SETTINGS && DIFFICULTY_SETTINGS[difficulty]?.description}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
