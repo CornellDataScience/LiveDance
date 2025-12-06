@@ -7,7 +7,7 @@ import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonSt
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose, gameMode = false, onVideoEnded }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,13 +82,16 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       videoPlayerControlRef.current = {
         play: () => {
           if (videoRef.current) {
-            videoRef.current.play();
+            return videoRef.current.play();
           }
+          return Promise.reject(new Error('Video element not available'));
         },
         pause: () => {
           if (videoRef.current) {
             videoRef.current.pause();
+            return Promise.resolve();
           }
+          return Promise.reject(new Error('Video element not available'));
         }
       };
     }
@@ -103,7 +106,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
 
     const handlePlay = () => setVideoPlaying(true);
     const handlePause = () => setVideoPlaying(false);
-    const handleEnded = () => setVideoPlaying(false);
+    const handleEnded = () => {
+      setVideoPlaying(false);
+      if (onVideoEnded) onVideoEnded();
+    };
 
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
@@ -114,7 +120,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [selectedVideo, setVideoPlaying]);
+  }, [selectedVideo, setVideoPlaying, onVideoEnded]);
 
   const fetchVideos = async () => {
     try {
@@ -383,44 +389,48 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   return (
     <div style={{
       height: '100%',
+      width: '100%',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      background: gameMode ? '#000' : 'transparent'
     }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '12px'
-      }}>
-        <h3 style={{
-          margin: 0,
-          fontSize: '18px',
-          fontWeight: '600',
-          color: 'white'
+      {!gameMode && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '12px'
         }}>
-          Reference Video
-        </h3>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setShowDownloader(!showDownloader)}
-            style={{
-              ...headerButtonStyle,
-              background: getHeaderButtonBackground(showDownloader)
-            }}
-          >
-            {showDownloader ? 'Hide Downloader' : 'Download Video'}
-          </button>
-          <button
-            onClick={fetchVideos}
-            style={{
-              ...headerButtonStyle,
-              background: '#667eea'
-            }}
-          >
-            Refresh
-          </button>
+          <h3 style={{
+            margin: 0,
+            fontSize: '18px',
+            fontWeight: '600',
+            color: 'white'
+          }}>
+            Reference Video
+          </h3>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setShowDownloader(!showDownloader)}
+              style={{
+                ...headerButtonStyle,
+                background: getHeaderButtonBackground(showDownloader)
+              }}
+            >
+              {showDownloader ? 'Hide Downloader' : 'Download Video'}
+            </button>
+            <button
+              onClick={fetchVideos}
+              style={{
+                ...headerButtonStyle,
+                background: '#667eea'
+              }}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* YouTube Downloader */}
       {showDownloader && (
@@ -571,53 +581,63 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       )}
 
       {selectedVideo && (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{
-            marginBottom: '12px',
-            padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.9)',
-            borderRadius: '6px',
-            fontSize: '13px',
-            color: '#2d3748',
-            wordBreak: 'break-word',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span>{selectedVideo.filename}</span>
-            <button
-              onClick={() => setShowSkeleton(!showSkeleton)}
-              style={{
-                padding: '4px 8px',
-                fontSize: '11px',
-                background: showSkeleton ? '#38a169' : '#cbd5e0',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '500',
-                transition: 'background 0.2s'
-              }}
-            >
-              {showSkeleton ? 'Hide Skeleton' : 'Show Skeleton'}
-            </button>
-          </div>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: gameMode ? '100%' : 'auto',
+          flex: gameMode ? '1' : 'none'
+        }}>
+          {!gameMode && (
+            <div style={{
+              marginBottom: '12px',
+              padding: '8px 12px',
+              background: 'rgba(255, 255, 255, 0.9)',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: '#2d3748',
+              wordBreak: 'break-word',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>{selectedVideo.filename}</span>
+              <button
+                onClick={() => setShowSkeleton(!showSkeleton)}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  background: showSkeleton ? '#38a169' : '#cbd5e0',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  transition: 'background 0.2s'
+                }}
+              >
+                {showSkeleton ? 'Hide Skeleton' : 'Show Skeleton'}
+              </button>
+            </div>
+          )}
 
           <div style={{
             position: 'relative',
-            borderRadius: '16px',
+            borderRadius: gameMode ? '0' : '16px',
             overflow: 'hidden',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+            boxShadow: gameMode ? 'none' : '0 4px 20px rgba(0, 0, 0, 0.2)',
+            height: gameMode ? '100%' : 'auto',
+            flex: gameMode ? '1' : 'none'
           }}>
             <video
               ref={videoRef}
               key={selectedVideo.filename}
-              controls
-              loop
+              controls={!gameMode}
               style={{
                 display: 'block',
                 width: '100%',
-                height: 'auto'
+                height: gameMode ? '100%' : 'auto',
+                objectFit: 'contain',
+                background: '#000'
               }}
               src={`http://localhost:8000/video/${selectedVideo.filename}`}
               crossOrigin="anonymous"
@@ -629,7 +649,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: 'auto',
+                height: gameMode ? '100%' : 'auto',
+                objectFit: 'contain',
                 pointerEvents: 'none'
               }}
             />
@@ -651,22 +672,24 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
             </div>
           </div>
 
-          <button
-            onClick={handleClearVideo}
-            style={{
-              marginTop: '12px',
-              padding: '10px',
-              background: '#e53e3e',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '500',
-              fontSize: '14px'
-            }}
-          >
-            Clear Video
-          </button>
+          {!gameMode && (
+            <button
+              onClick={handleClearVideo}
+              style={{
+                marginTop: '12px',
+                padding: '10px',
+                background: '#e53e3e',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '14px'
+              }}
+            >
+              Clear Video
+            </button>
+          )}
         </div>
       )}
     </div>

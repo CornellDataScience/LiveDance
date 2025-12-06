@@ -70,6 +70,28 @@ export const usePoseDetectorController = () => {
   const frameScoresRef = useRef([]);
   const lastAggregateTimeRef = useRef(Date.now());
 
+  // Game session state
+  const [gameSessionActive, setGameSessionActive] = useState(false);
+  const [showGameSummary, setShowGameSummary] = useState(false);
+  const [countdown, setCountdown] = useState(null); // 3, 2, 1, null
+
+  // Classification tracking
+  const [currentClassification, setCurrentClassification] = useState(null); // 'miss'|'mid'|'good'|'great'
+  const [floatingText, setFloatingText] = useState(null); // {text, timestamp}
+  const gameStatsRef = useRef({
+    classifications: [], // array of {score, classification, timestamp}
+    missCount: 0,
+    midCount: 0,
+    goodCount: 0,
+    greatCount: 0,
+    combo: 0,
+    maxCombo: 0
+  });
+
+  // End-game summary data
+  const [gameResults, setGameResults] = useState(null);
+  const [videoCompletedNaturally, setVideoCompletedNaturally] = useState(false);
+
   // Human-readable names for body parts
   const BODY_PART_NAMES = {
     'nose': 'Head Position',
@@ -267,6 +289,35 @@ export const usePoseDetectorController = () => {
   };
 
   /**
+   * Calculate letter grade based on game stats
+   */
+  const calculateLetterGrade = (stats) => {
+    const total = stats.missCount + stats.midCount + stats.goodCount + stats.greatCount;
+    if (total === 0) return 'D';
+
+    const greatPercentage = (stats.greatCount / total) * 100;
+    const missCount = stats.missCount;
+
+    // SS: ≥90% greats, ≤5 misses
+    if (greatPercentage >= 90 && missCount <= 5) return 'SS';
+
+    // S: ≥80% greats, ≤10 misses
+    if (greatPercentage >= 80 && missCount <= 10) return 'S';
+
+    // A: ≥70% greats, ≤15 misses
+    if (greatPercentage >= 70 && missCount <= 15) return 'A';
+
+    // B: ≥60% greats OR ≤20 misses
+    if (greatPercentage >= 60 || missCount <= 20) return 'B';
+
+    // C: ≥40% greats OR ≤30 misses
+    if (greatPercentage >= 40 || missCount <= 30) return 'C';
+
+    // D: everything else
+    return 'D';
+  };
+
+  /**
    * Calculate similarity score for each joint (0-100) with directional data
    */
   const calculateJointSimilarity = (userPose, refPose) => {
@@ -412,6 +463,42 @@ export const usePoseDetectorController = () => {
 
     setTopImprovements(improvements);
     setOverallScore(overall);
+
+    // Game session classification tracking - only when video is playing
+    if (gameSessionActive && videoPlaying && overall !== null) {
+      // Determine classification based on overall score
+      let classification;
+      if (overall < 40) classification = 'miss';
+      else if (overall < 60) classification = 'mid';
+      else if (overall < 80) classification = 'good';
+      else classification = 'great';
+
+      // Update game stats
+      const stats = gameStatsRef.current;
+      stats.classifications.push({
+        score: overall,
+        classification,
+        timestamp: Date.now()
+      });
+
+      // Update counters
+      stats[`${classification}Count`]++;
+
+      // Update combo
+      if (classification === 'good' || classification === 'great') {
+        stats.combo++;
+        stats.maxCombo = Math.max(stats.maxCombo, stats.combo);
+      } else {
+        stats.combo = 0;
+      }
+
+      // Set current classification for display
+      setCurrentClassification(classification);
+      setFloatingText({
+        text: `${classification.toUpperCase()}! ${stats.combo > 0 ? `Combo: ${stats.combo}` : ''}`,
+        timestamp: Date.now()
+      });
+    }
 
     // Clear scores for next second
     frameScoresRef.current = [];
@@ -778,6 +865,11 @@ export const usePoseDetectorController = () => {
    */
   const handleReferenceVideoSelect = (video) => {
     setReferenceVideo(video);
+
+    // If in game mode, start countdown after video selection
+    if (video && gameSessionActive) {
+      startCountdownAndPlay();
+    }
   };
 
   /**
@@ -785,6 +877,201 @@ export const usePoseDetectorController = () => {
    */
   const toggleGestureControl = () => {
     setGestureControlEnabled(!gestureControlEnabled);
+  };
+
+  /**
+   * Start game session with countdown
+   */
+  const startGameSession = () => {
+    // IMMEDIATE UI switch to game mode
+    setGameSessionActive(true);
+    setVideoCompletedNaturally(false);
+
+    // Clear any existing floating text/classification
+    setFloatingText(null);
+    setCurrentClassification(null);
+
+    // Reset stats
+    gameStatsRef.current = {
+      classifications: [],
+      missCount: 0,
+      midCount: 0,
+      goodCount: 0,
+      greatCount: 0,
+      combo: 0,
+      maxCombo: 0
+    };
+
+    // Clear pose comparison data for fresh start
+    frameScoresRef.current = [];
+    setTopImprovements([]);
+    setOverallScore(null);
+
+    // NO COUNTDOWN HERE - wait for video selection
+  };
+
+  /**
+   * Start countdown and auto-play video
+   * Called after video is selected in game mode
+   */
+  const startCountdownAndPlay = () => {
+    let count = 3;
+    setCountdown(count);
+
+    const countdownInterval = setInterval(() => {
+      count--;
+      if (count > 0) {
+        setCountdown(count);
+      } else {
+        clearInterval(countdownInterval);
+        setCountdown(null);
+
+        // Auto-play reference video AFTER countdown
+        setTimeout(() => {
+          if (videoPlayerControlRef.current) {
+            console.log('[DEBUG] Attempting to play video');
+            videoPlayerControlRef.current.play().catch(err => {
+              console.error('Video play failed:', err);
+            });
+          } else {
+            console.error('[DEBUG] videoPlayerControlRef.current is null');
+          }
+        }, 500);
+      }
+    }, 1000);
+  };
+
+  /**
+   * Exit game session and show summary
+   */
+  const exitGameSession = () => {
+    // Pause video
+    if (videoPlayerControlRef.current) {
+      videoPlayerControlRef.current.pause();
+    }
+
+    // Calculate grade or show INCOMPLETE
+    const stats = gameStatsRef.current;
+
+    let grade;
+    if (!videoCompletedNaturally) {
+      // Early exit = incomplete (regardless of classification count)
+      grade = 'INCOMPLETE';
+    } else {
+      // Video completed naturally = valid grade
+      grade = calculateLetterGrade(stats);
+    }
+
+    setGameResults({
+      ...stats,
+      grade,
+      incomplete: !videoCompletedNaturally
+    });
+    setShowGameSummary(true);
+    setGameSessionActive(false);
+
+    // Reset completion flag for next session
+    setVideoCompletedNaturally(false);
+
+    // Clear pose comparison data
+    frameScoresRef.current = [];
+    setTopImprovements([]);
+    setOverallScore(null);
+  };
+
+  /**
+   * Reset game session (restart with countdown)
+   */
+  const resetGameSession = () => {
+    setShowGameSummary(false);
+    setGameResults(null);
+
+    // Clear video selection → force user to select again
+    setReferenceVideo(null);
+
+    // Clear pose comparison data
+    frameScoresRef.current = [];
+    setTopImprovements([]);
+    setOverallScore(null);
+    setReferencePose(null);
+
+    // Reset video playing state
+    setVideoPlaying(false);
+
+    // Pause video if playing
+    if (videoPlayerControlRef.current) {
+      videoPlayerControlRef.current.pause();
+    }
+
+    // Start fresh game session → shows video selection screen
+    startGameSession();
+  };
+
+  /**
+   * Close game summary and return to normal mode
+   */
+  const closeGameSummary = () => {
+    setShowGameSummary(false);
+    setGameResults(null);
+    setGameSessionActive(false);
+
+    // Pause video
+    if (videoPlayerControlRef.current) {
+      videoPlayerControlRef.current.pause();
+    }
+
+    // Clear all game-related state
+    frameScoresRef.current = [];
+    setTopImprovements([]);
+    setOverallScore(null);
+    setReferencePose(null);
+    setFloatingText(null);
+    setCurrentClassification(null);
+
+    // Clear video selection to return to clean home state
+    setReferenceVideo(null);
+    setVideoPlaying(false);
+  };
+
+  /**
+   * Handle video ended naturally during game session
+   */
+  const handleVideoEnded = () => {
+    if (gameSessionActive) {
+      setVideoCompletedNaturally(true);
+      // Auto-exit and show summary
+      exitGameSession();
+    }
+  };
+
+  /**
+   * Export game data as JSON
+   */
+  const exportGameData = () => {
+    if (!gameResults) return;
+
+    const data = {
+      timestamp: new Date().toISOString(),
+      grade: gameResults.grade,
+      stats: {
+        total: gameResults.missCount + gameResults.midCount + gameResults.goodCount + gameResults.greatCount,
+        misses: gameResults.missCount,
+        mids: gameResults.midCount,
+        goods: gameResults.goodCount,
+        greats: gameResults.greatCount,
+        maxCombo: gameResults.maxCombo
+      },
+      classifications: gameResults.classifications,
+      areasToImprove: topImprovements
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `game-session-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   /**
@@ -824,6 +1111,27 @@ export const usePoseDetectorController = () => {
     setGestureStartTime(null);
     setGestureProgress(0);
   }, [referenceVideo]);
+
+  /**
+   * Restore camera stream when switching between normal and game modes
+   */
+  useEffect(() => {
+    console.log('[DEBUG] Camera restoration check:', {
+      cameraEnabled,
+      hasStream: !!streamRef.current,
+      hasVideoEl: !!videoRef.current,
+      hasSrcObject: videoRef.current?.srcObject,
+      gameSessionActive,
+      showGameSummary
+    });
+
+    if (cameraEnabled && streamRef.current && videoRef.current) {
+      if (!videoRef.current.srcObject) {
+        console.log('[DEBUG] Restoring camera stream');
+        videoRef.current.srcObject = streamRef.current;
+      }
+    }
+  }, [gameSessionActive, showGameSummary, cameraEnabled]);
 
   /**
    * Monitor hand gestures and track hold duration
@@ -993,6 +1301,20 @@ export const usePoseDetectorController = () => {
     // Pose comparison
     topImprovements,
     overallScore,
-    handleReferencePose
+    handleReferencePose,
+    // Game session
+    gameSessionActive,
+    showGameSummary,
+    countdown,
+    currentClassification,
+    floatingText,
+    gameStatsRef,
+    gameResults,
+    startGameSession,
+    exitGameSession,
+    resetGameSession,
+    closeGameSummary,
+    exportGameData,
+    handleVideoEnded
   };
 };

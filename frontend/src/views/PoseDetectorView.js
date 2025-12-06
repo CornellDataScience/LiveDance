@@ -34,7 +34,21 @@ const PoseDetectorView = ({
   togglePerformanceMonitor,
   topImprovements,
   overallScore,
-  handleReferencePose
+  handleReferencePose,
+  // Game session props
+  gameSessionActive,
+  showGameSummary,
+  countdown,
+  currentClassification,
+  floatingText,
+  gameStatsRef,
+  gameResults,
+  startGameSession,
+  exitGameSession,
+  resetGameSession,
+  closeGameSummary,
+  exportGameData,
+  handleVideoEnded
 }) => {
   return (
     <div style={{ 
@@ -197,8 +211,43 @@ const PoseDetectorView = ({
         </div>
       )}
 
+      {/* Game Session Start Button */}
+      {isReady && !gameSessionActive && !showGameSummary && (
+        <div style={{
+          maxWidth: '1400px',
+          margin: '0 auto 30px',
+          textAlign: 'center'
+        }}>
+          <button
+            onClick={startGameSession}
+            style={{
+              padding: '20px 40px',
+              fontSize: '20px',
+              fontWeight: '700',
+              background: 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '16px',
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(72, 187, 120, 0.4)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 12px 32px rgba(72, 187, 120, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(72, 187, 120, 0.4)';
+            }}
+          >
+            Start Game Session
+          </button>
+        </div>
+      )}
+
       {/* Control Buttons */}
-      {isReady && (
+      {isReady && !gameSessionActive && !showGameSummary && (
         <div style={{
           maxWidth: '720px',
           margin: '0 auto 30px',
@@ -324,15 +373,208 @@ const PoseDetectorView = ({
         </div>
       )}
 
+      {/* Game Mode Full-Screen Layout */}
+      {(gameSessionActive || showGameSummary) && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: '#000',
+          zIndex: 2000
+        }}>
+          {/* Exit and Reset Buttons */}
+          <div style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            display: 'flex',
+            gap: '12px',
+            zIndex: 2002
+          }}>
+            <button
+              onClick={exitGameSession}
+              style={{
+                padding: '12px 24px',
+                background: 'rgba(229, 62, 62, 0.9)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px'
+              }}
+            >
+              Exit
+            </button>
+            <button
+              onClick={resetGameSession}
+              style={{
+                padding: '12px 24px',
+                background: 'rgba(237, 137, 54, 0.9)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px'
+              }}
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Countdown Overlay */}
+          {countdown !== null && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              background: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2003
+            }}>
+              <div style={{
+                fontSize: '120px',
+                fontWeight: '700',
+                color: 'white',
+                animation: 'pulse 1s ease-in-out'
+              }}>
+                {countdown}
+              </div>
+            </div>
+          )}
+
+          {/* Video Layout: 65% reference, 35% camera */}
+          <div style={{
+            display: 'flex',
+            width: '100%',
+            height: '100%'
+          }}>
+            {/* Reference Video - 65% */}
+            <div style={{
+              width: '65%',
+              height: '100%',
+              position: 'relative'
+            }}>
+              <ReferenceVideoPlayer
+                onVideoSelect={handleReferenceVideoSelect}
+                videoPlayerControlRef={videoPlayerControlRef}
+                setVideoPlaying={setVideoPlaying}
+                onReferencePose={handleReferencePose}
+                gameMode={true}
+                onVideoEnded={handleVideoEnded}
+              />
+            </div>
+
+            {/* Camera Feed - 35% */}
+            <div style={{
+              width: '35%',
+              height: '100%',
+              position: 'relative',
+              background: '#000'
+            }}>
+              {cameraEnabled ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    width="640"
+                    height="480"
+                    autoPlay
+                    playsInline
+                    style={{
+                      transform: 'scaleX(-1)',
+                      display: 'block',
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    width="640"
+                    height="480"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      transform: 'scaleX(-1)',
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+
+                  {/* Floating Classification Text */}
+                  {floatingText && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      fontSize: '48px',
+                      fontWeight: '700',
+                      color: currentClassification === 'great' ? '#48bb78' :
+                             currentClassification === 'good' ? '#38a169' :
+                             currentClassification === 'mid' ? '#ed8936' : '#e53e3e',
+                      textShadow: '0 4px 8px rgba(0, 0, 0, 0.8)',
+                      animation: 'fadeInOut 1s ease-in-out',
+                      zIndex: 10,
+                      pointerEvents: 'none'
+                    }}>
+                      {floatingText.text}
+                    </div>
+                  )}
+
+                  {/* Current Combo Display */}
+                  {gameSessionActive && gameStatsRef.current.combo > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '20px',
+                      left: '20px',
+                      fontSize: '32px',
+                      fontWeight: '700',
+                      color: '#ffd700',
+                      textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
+                      pointerEvents: 'none'
+                    }}>
+                      Combo: {gameStatsRef.current.combo}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontSize: '16px'
+                }}>
+                  Camera Off
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Video Display - Side by Side Layout */}
-      <div style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '24px',
-        alignItems: 'start'
-      }}>
+      {!gameSessionActive && !showGameSummary && (
+        <div style={{
+          maxWidth: '1400px',
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+          gap: '24px',
+          alignItems: 'start'
+        }}>
         {/* Reference Video Player */}
         <div style={{
           background: 'rgba(255, 255, 255, 0.1)',
@@ -347,6 +589,7 @@ const PoseDetectorView = ({
             videoPlayerControlRef={videoPlayerControlRef}
             setVideoPlaying={setVideoPlaying}
             onReferencePose={handleReferencePose}
+            onVideoEnded={handleVideoEnded}
           />
         </div>
 
@@ -462,10 +705,11 @@ const PoseDetectorView = ({
             )}
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Top 10 Improvements Panel */}
-      {isReady && topImprovements && topImprovements.length > 0 && (
+      {isReady && !gameSessionActive && !showGameSummary && topImprovements && topImprovements.length > 0 && (
         <div style={{
           maxWidth: '1400px',
           margin: '20px auto 0'
@@ -574,7 +818,7 @@ const PoseDetectorView = ({
       )}
 
       {/* Data Display Panel (below videos) */}
-      {isReady && (
+      {isReady && !gameSessionActive && !showGameSummary && (
         <div style={{
           maxWidth: '1400px',
           margin: '20px auto 0'
@@ -905,15 +1149,233 @@ const PoseDetectorView = ({
         </div>
       )}
 
+      {/* End-Game Summary Modal */}
+      {showGameSummary && gameResults && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(0, 0, 0, 0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 3000,
+          padding: '40px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '24px',
+            padding: '48px',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 24px 48px rgba(0, 0, 0, 0.3)'
+          }}>
+            {/* Grade Display */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '40px'
+            }}>
+              <div style={{
+                fontSize: '96px',
+                fontWeight: '700',
+                color: gameResults.grade === 'INCOMPLETE' ? '#9ca3af' :
+                       gameResults.grade === 'SS' || gameResults.grade === 'S' ? '#ffd700' :
+                       gameResults.grade === 'A' ? '#48bb78' :
+                       gameResults.grade === 'B' ? '#38a169' :
+                       gameResults.grade === 'C' ? '#ed8936' : '#e53e3e',
+                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+                marginBottom: '16px'
+              }}>
+                {gameResults.grade}
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: '600',
+                color: 'white'
+              }}>
+                Game Complete!
+              </div>
+              {gameResults.incomplete && (
+                <div style={{
+                  fontSize: '16px',
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  marginTop: '8px'
+                }}>
+                  Session ended early - complete full video for letter grade!
+                </div>
+              )}
+            </div>
+
+            {/* Stats Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              marginBottom: '32px'
+            }}>
+              <StatCard label="Greats" value={gameResults.greatCount} color="#48bb78" />
+              <StatCard label="Goods" value={gameResults.goodCount} color="#38a169" />
+              <StatCard label="Mids" value={gameResults.midCount} color="#ed8936" />
+              <StatCard label="Misses" value={gameResults.missCount} color="#e53e3e" />
+              <StatCard label="Max Combo" value={gameResults.maxCombo} color="#ffd700" />
+              <StatCard label="Total" value={
+                gameResults.missCount + gameResults.midCount +
+                gameResults.goodCount + gameResults.greatCount
+              } color="#667eea" />
+            </div>
+
+            {/* Areas to Improve */}
+            {topImprovements && topImprovements.length > 0 && (
+              <div style={{
+                marginBottom: '32px'
+              }}>
+                <h3 style={{
+                  color: 'white',
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  marginBottom: '16px'
+                }}>
+                  Areas to Improve
+                </h3>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '12px'
+                }}>
+                  {topImprovements.slice(0, 6).map((item, idx) => (
+                    <div key={item.joint} style={{
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      padding: '12px',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: 'white',
+                        marginBottom: '4px'
+                      }}>
+                        #{idx + 1} {item.name}
+                      </div>
+                      <div style={{
+                        fontSize: '12px',
+                        color: 'rgba(255, 255, 255, 0.8)'
+                      }}>
+                        {item.recommendation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={exportGameData}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  background: '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Export JSON
+              </button>
+              <button
+                onClick={resetGameSession}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  background: '#38a169',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Play Again
+              </button>
+              <button
+                onClick={closeGameSummary}
+                style={{
+                  padding: '16px 32px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  background: '#e53e3e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+          20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+          80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        }
+
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
       `}</style>
     </div>
   );
 };
+
+// StatCard component for game summary
+const StatCard = ({ label, value, color }) => (
+  <div style={{
+    background: 'rgba(255, 255, 255, 0.1)',
+    padding: '20px',
+    borderRadius: '12px',
+    textAlign: 'center',
+    border: `2px solid ${color}`
+  }}>
+    <div style={{
+      fontSize: '32px',
+      fontWeight: '700',
+      color: color,
+      marginBottom: '8px'
+    }}>
+      {value}
+    </div>
+    <div style={{
+      fontSize: '14px',
+      color: 'white',
+      fontWeight: '500'
+    }}>
+      {label}
+    </div>
+  </div>
+);
 
 export default PoseDetectorView;
 
