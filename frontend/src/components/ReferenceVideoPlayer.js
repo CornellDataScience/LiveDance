@@ -7,7 +7,7 @@ import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonSt
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
  * Shows video selector and player for side-by-side comparison with live camera
  */
-const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose, gameMode = false, onVideoEnded }) => {
+const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPlaying, onReferencePose, gameMode = false, onVideoEnded, referenceVideo }) => {
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +23,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   const socketRef = useRef(null);
   const fpsCounterRef = useRef({ count: 0, lastTime: Date.now() });
   const lastSendTimeRef = useRef(0);
+  const prevGameModeRef = useRef(gameMode);
 
   /**
    * Fetch available videos from backend
@@ -91,7 +92,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
             videoRef.current.pause();
             return Promise.resolve();
           }
-          return Promise.reject(new Error('Video element not available'));
+          // Return resolved promise instead of rejecting when video doesn't exist
+          // This prevents errors when pausing before video selection
+          console.log('[DEBUG] ReferenceVideoPlayer: Pause called but no video element');
+          return Promise.resolve();
         }
       };
     }
@@ -148,6 +152,16 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
     setSelectedVideo(video);
     if (onVideoSelect) {
       onVideoSelect(video);
+    }
+    
+    // Reset video playback position to beginning when selected in game mode
+    if (video && gameMode && videoRef.current) {
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+          console.log('[DEBUG] ReferenceVideoPlayer: Reset video to beginning');
+        }
+      }, 100);
     }
   };
 
@@ -355,6 +369,44 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       }
     }
   };
+
+  /**
+   * Clear selected video when exiting game mode
+   * This ensures a fresh start when re-entering game mode
+   */
+  useEffect(() => {
+    // When game mode transitions from true to false, clear the video
+    if (prevGameModeRef.current && !gameMode && selectedVideo) {
+      console.log('[DEBUG] ReferenceVideoPlayer: Clearing video on game mode exit');
+      setSelectedVideo(null);
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.pause();
+      }
+      // Notify parent that video was cleared
+      if (onVideoSelect) {
+        onVideoSelect(null);
+      }
+    }
+    
+    // Update the ref for next render
+    prevGameModeRef.current = gameMode;
+  }, [gameMode, selectedVideo, onVideoSelect]);
+
+  /**
+   * Sync local selectedVideo state with parent referenceVideo
+   * When parent clears referenceVideo (e.g., in reset), clear local state
+   */
+  useEffect(() => {
+    if (referenceVideo === null && selectedVideo !== null) {
+      console.log('[DEBUG] ReferenceVideoPlayer: Parent cleared video, clearing local state');
+      setSelectedVideo(null);
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.pause();
+      }
+    }
+  }, [referenceVideo, selectedVideo]);
 
   /**
    * Start pose detection when video is selected
@@ -632,6 +684,13 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
               ref={videoRef}
               key={selectedVideo.filename}
               controls={!gameMode}
+              onLoadedMetadata={() => {
+                // Reset to beginning when video metadata loads
+                if (videoRef.current && gameMode) {
+                  videoRef.current.currentTime = 0;
+                  console.log('[DEBUG] ReferenceVideoPlayer: Video loaded, reset to beginning');
+                }
+              }}
               style={{
                 display: 'block',
                 width: '100%',
