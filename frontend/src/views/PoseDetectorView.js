@@ -469,6 +469,7 @@ const PoseDetectorView = ({
                 onReferencePose={handleReferencePose}
                 gameMode={true}
                 onVideoEnded={handleVideoEnded}
+                referenceVideo={referenceVideo}
               />
             </div>
 
@@ -590,6 +591,7 @@ const PoseDetectorView = ({
             setVideoPlaying={setVideoPlaying}
             onReferencePose={handleReferencePose}
             onVideoEnded={handleVideoEnded}
+            referenceVideo={referenceVideo}
           />
         </div>
 

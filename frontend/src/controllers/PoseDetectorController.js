@@ -1108,9 +1108,11 @@ export const usePoseDetectorController = () => {
    * Exit game session and show summary
    */
   const exitGameSession = () => {
-    // Pause video
+    // Pause video (with null check to prevent error if no video selected)
     if (videoPlayerControlRef.current) {
-      videoPlayerControlRef.current.pause();
+      videoPlayerControlRef.current.pause().catch(err => {
+        console.log('[DEBUG] Pause failed in exitGameSession (likely no video selected):', err);
+      });
     }
 
     // Calculate grade or show INCOMPLETE
@@ -1145,13 +1147,22 @@ export const usePoseDetectorController = () => {
   };
 
   /**
-   * Reset game session (restart with countdown)
+   * Reset game session (stay in game mode, return to video selection)
    */
   const resetGameSession = () => {
     setShowGameSummary(false);
     setGameResults(null);
+    // Ensure gameSessionActive = true (in case it was set to false by exitGameSession)
+    setGameSessionActive(true);
 
-    // Clear video selection → force user to select again
+    // Pause video if playing (with null check)
+    if (videoPlayerControlRef.current) {
+      videoPlayerControlRef.current.pause().catch(err => {
+        console.log('[DEBUG] Pause failed (likely no video selected):', err);
+      });
+    }
+
+    // Clear video selection → shows video picker in game mode
     setReferenceVideo(null);
 
     // Clear pose comparison data
@@ -1165,13 +1176,25 @@ export const usePoseDetectorController = () => {
     // Reset video playing state
     setVideoPlaying(false);
 
-    // Pause video if playing
-    if (videoPlayerControlRef.current) {
-      videoPlayerControlRef.current.pause();
-    }
+    // Clear any floating text/classification
+    setFloatingText(null);
+    setCurrentClassification(null);
 
-    // Start fresh game session → shows video selection screen
-    startGameSession();
+    // Reset stats
+    gameStatsRef.current = {
+      classifications: [],
+      missCount: 0,
+      midCount: 0,
+      goodCount: 0,
+      greatCount: 0,
+      combo: 0,
+      maxCombo: 0
+    };
+
+    // Reset video completion flag
+    setVideoCompletedNaturally(false);
+
+    // User stays in/returns to game session, sees video selection screen (no UI flash)
   };
 
   /**
@@ -1182,9 +1205,11 @@ export const usePoseDetectorController = () => {
     setGameResults(null);
     setGameSessionActive(false);
 
-    // Pause video
+    // Pause video (with null check)
     if (videoPlayerControlRef.current) {
-      videoPlayerControlRef.current.pause();
+      videoPlayerControlRef.current.pause().catch(err => {
+        console.log('[DEBUG] Pause failed in closeGameSummary:', err);
+      });
     }
 
     // Clear all game-related state
