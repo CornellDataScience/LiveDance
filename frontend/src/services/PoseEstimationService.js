@@ -138,6 +138,7 @@ class PoseEstimationService {
     // Calculate timing metrics correctly
     const backendTime = data.timings?.total_backend || 0;
     const networkLatency = Math.max(0, totalTime - backendTime);
+    const actualTotal = imageCaptureTime + totalTime; // Total = Frontend + Network + Backend
     
     const enrichedData = {
       ...data,
@@ -145,7 +146,7 @@ class PoseEstimationService {
         image_capture: imageCaptureTime,
         network_latency: networkLatency,
         json_parsing: 0, // No JSON parsing in WebSocket binary mode
-        total_frontend: totalTime
+        total_frontend: actualTotal
       },
       fps: this.fps,
       mode: this.use3D ? '3D' : '2D'

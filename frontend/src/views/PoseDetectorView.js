@@ -35,6 +35,9 @@ const PoseDetectorView = ({
   topImprovements,
   overallScore,
   handleReferencePose,
+  // Reference PEPS
+  referencePeps,
+  handleReferencePeps,
   // Game session props
   gameSessionActive,
   showGameSummary,
@@ -101,19 +104,18 @@ const PoseDetectorView = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               cursor: 'pointer',
-              background: 'rgba(0, 0, 0, 0.15)',
               transition: 'background 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(0, 0, 0, 0.25)';
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.background = 'transparent';
             }}
           >
             <div style={{ 
               fontWeight: '600', 
-              fontSize: '14px', 
+              fontSize: '18px', 
               color: 'white',
               display: 'flex',
               alignItems: 'center'
@@ -136,50 +138,42 @@ const PoseDetectorView = ({
             <div style={{
               padding: '16px',
               color: 'white',
-              fontSize: '13px',
-              minWidth: '280px'
+              minWidth: '240px'
             }}>
-              <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Mode:</span>
-                  <span style={{ color: '#ffd700', fontWeight: '600' }}>{performanceMetrics.mode || '3D'}</span>
+              <div style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ fontSize: '14px', color: 'white', marginBottom: '10px', fontWeight: '600' }}>
+                  Pose Estimations Per Second
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '6px' }}>
+                  <span style={{ color: 'white' }}>Camera</span>
+                  <span style={{ color: 'white' }}>{performanceMetrics.fps} PEPS</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                  <span style={{ color: 'white' }}>Reference</span>
+                  <span style={{ color: 'white' }}>{referencePeps} PEPS</span>
                 </div>
               </div>
               
-              <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Camera FPS:</span>
-                  <span style={{ color: '#40E0D0', fontWeight: '600' }}>{performanceMetrics.fps}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Total Latency:</span>
-                  <span style={{ color: '#ff6b9d', fontWeight: '600' }}>{performanceMetrics.totalLatency}ms</span>
-                </div>
+              <div style={{ fontSize: '14px', color: 'white', marginBottom: '10px', fontWeight: '600' }}>
+                Latency
               </div>
-              
-              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
-                Frontend:
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '6px' }}>
+                <span style={{ color: 'white' }}>Frontend</span>
+                <span style={{ color: 'white' }}>{performanceMetrics.frontendTime} ms</span>
               </div>
-              <div style={{ paddingLeft: '12px', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Image Capture:</span>
-                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.frontendTime}ms</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '6px' }}>
+                <span style={{ color: 'white' }}>Network</span>
+                <span style={{ color: 'white' }}>{performanceMetrics.networkLatency} ms</span>
               </div>
-              
-              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
-                Network:
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '6px' }}>
+                <span style={{ color: 'white' }}>Backend</span>
+                <span style={{ color: 'white' }}>{performanceMetrics.backendTime} ms</span>
               </div>
-              <div style={{ paddingLeft: '12px', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>WebSocket:</span>
-                  <span style={{ color: '#c77dff' }}>{performanceMetrics.networkLatency}ms</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                <span style={{ color: 'white' }}>Total</span>
+                <span style={{ color: 'white' }}>{performanceMetrics.totalLatency} ms</span>
               </div>
-              
-              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'rgba(255, 255, 255, 0.7)', fontWeight: '600' }}>
-                Backend ({performanceMetrics.backendTime}ms):
-              </div>
+              {/* Backend breakdown - commented out for cleaner UI
               <div style={{ paddingLeft: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
                   <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Decode:</span>
@@ -197,15 +191,12 @@ const PoseDetectorView = ({
                   <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• 3D Angles:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.angles3d}ms</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Hands:</span>
-                  <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.hands}ms</span>
-                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
                   <span style={{ color: 'rgba(255, 255, 255, 0.8)' }}>• Smoothing:</span>
                   <span style={{ color: '#a0d8f1' }}>{performanceMetrics.backendBreakdown.smoothing}ms</span>
                 </div>
               </div>
+              */}
             </div>
           )}
         </div>
@@ -215,30 +206,28 @@ const PoseDetectorView = ({
       {isReady && !gameSessionActive && !showGameSummary && (
         <div style={{
           maxWidth: '1400px',
-          margin: '0 auto 30px',
+          margin: '0 auto',
           textAlign: 'center'
         }}>
           <button
             onClick={startGameSession}
             style={{
-              padding: '20px 40px',
-              fontSize: '20px',
-              fontWeight: '700',
-              background: 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)',
+              padding: '14px 28px',
+              fontSize: '18px',
+              fontWeight: '600',
+              background: '#38B2AC',
               color: 'white',
               border: 'none',
-              borderRadius: '16px',
+              borderRadius: '8px',
               cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(72, 187, 120, 0.4)',
-              transition: 'all 0.3s ease'
+              boxShadow: '0 4px 12px rgba(56, 178, 172, 0.3)',
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 12px 32px rgba(72, 187, 120, 0.5)';
+              e.currentTarget.style.background = '#4FD1C5';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 8px 24px rgba(72, 187, 120, 0.4)';
+              e.currentTarget.style.background = '#38B2AC';
             }}
           >
             Start Game Session
@@ -256,6 +245,7 @@ const PoseDetectorView = ({
           justifyContent: 'center',
           flexWrap: 'wrap'
         }}>
+          {/* Show Data button - commented out
           <button
             onClick={toggleDataPanel}
             style={{
@@ -284,11 +274,13 @@ const PoseDetectorView = ({
           >
             {showData ? 'Hide Data' : 'Show Data'}
           </button>
+          */}
+          {/* Export Data button - commented out
           <button
             onClick={exportLandmarkData}
             style={{
               padding: '14px 28px',
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.15)',
               backdropFilter: 'blur(10px)',
               color: 'white',
               border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -312,11 +304,13 @@ const PoseDetectorView = ({
           >
             Export Data
           </button>
+          */}
+          {/* Toggle 2D/3D button - commented out
           <button
             onClick={toggle2D3D}
             style={{
               padding: '14px 28px',
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.15)',
               backdropFilter: 'blur(10px)',
               color: 'white',
               border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -340,6 +334,8 @@ const PoseDetectorView = ({
           >
             Toggle 2D/3D
           </button>
+          */}
+          {/* Gesture Control button - commented out (hand tracking disabled)
           {referenceVideo && (
             <button
               onClick={toggleGestureControl}
@@ -370,6 +366,7 @@ const PoseDetectorView = ({
               {gestureControlEnabled ? 'Gesture: ON' : 'Gesture: OFF'}
             </button>
           )}
+          */}
         </div>
       )}
 
@@ -467,8 +464,10 @@ const PoseDetectorView = ({
                 videoPlayerControlRef={videoPlayerControlRef}
                 setVideoPlaying={setVideoPlaying}
                 onReferencePose={handleReferencePose}
+                onReferencePeps={handleReferencePeps}
                 gameMode={true}
                 onVideoEnded={handleVideoEnded}
+                referenceVideo={referenceVideo}
               />
             </div>
 
@@ -577,7 +576,7 @@ const PoseDetectorView = ({
         }}>
         {/* Reference Video Player */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.1)',
+          background: 'rgba(255, 255, 255, 0.15)',
           backdropFilter: 'blur(10px)',
           borderRadius: '20px',
           padding: '24px',
@@ -589,13 +588,15 @@ const PoseDetectorView = ({
             videoPlayerControlRef={videoPlayerControlRef}
             setVideoPlaying={setVideoPlaying}
             onReferencePose={handleReferencePose}
+            onReferencePeps={handleReferencePeps}
             onVideoEnded={handleVideoEnded}
+            referenceVideo={referenceVideo}
           />
         </div>
 
         {/* Camera Feed & Skeleton */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.1)',
+          background: 'rgba(255, 255, 255, 0.15)',
           backdropFilter: 'blur(10px)',
           borderRadius: '20px',
           padding: '24px',
@@ -621,6 +622,12 @@ const PoseDetectorView = ({
               style={{
                 ...headerButtonStyle,
                 background: getHeaderButtonBackground(cameraEnabled)
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#8078D4';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = getHeaderButtonBackground(cameraEnabled);
               }}
             >
               {cameraEnabled ? 'Camera: On' : 'Camera: Off'}
@@ -715,7 +722,7 @@ const PoseDetectorView = ({
           margin: '20px auto 0'
         }}>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
+            background: 'rgba(255, 255, 255, 0.15)',
             backdropFilter: 'blur(10px)',
             borderRadius: '20px',
             padding: '24px',
@@ -788,7 +795,7 @@ const PoseDetectorView = ({
                     </span>
                   </div>
                   <div style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(255, 255, 255, 0.15)',
                     borderRadius: '4px',
                     height: '6px',
                     overflow: 'hidden'
@@ -824,14 +831,14 @@ const PoseDetectorView = ({
           margin: '20px auto 0'
         }}>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
+            background: 'rgba(255, 255, 255, 0.15)',
             backdropFilter: 'blur(10px)',
             borderRadius: '20px',
             padding: '24px',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
             border: '1px solid rgba(255, 255, 255, 0.2)'
           }}>
-        {/* Gesture Progress Indicator */}
+        {/* Gesture Progress Indicator - commented out (hand tracking disabled)
         {isReady && gestureProgress > 0 && referenceVideo && gestureControlEnabled && (
           <div style={{
             marginBottom: '24px',
@@ -879,6 +886,7 @@ const PoseDetectorView = ({
             </div>
           </div>
         )}
+        */}
 
         {showData && (
           <div style={{
@@ -1079,6 +1087,7 @@ const PoseDetectorView = ({
             borderRadius: '16px',
             color: 'white'
           }}>
+            {/* What's Being Tracked - commented out
             <h3 style={{ 
               margin: '0 0 12px 0',
               fontSize: '18px',
@@ -1121,9 +1130,10 @@ const PoseDetectorView = ({
                 <strong>3D Angles (Gold):</strong> {Object.keys(pose3DAngles).length} joints tracked
               </div>
             </div>
-            
+            */}
+
             <h3 style={{ 
-              margin: '20px 0 12px 0',
+              margin: '0 0 12px 0',
               fontSize: '18px',
               fontWeight: '600'
             }}>
@@ -1135,13 +1145,16 @@ const PoseDetectorView = ({
               lineHeight: '1.8',
               fontSize: '15px'
             }}>
+              {/* Gesture Control tips - commented out
               <li><strong>Gesture Control:</strong> Raise your hand <strong>high and hold still</strong> for 3 seconds</li>
               <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Open palm</strong> (fingers extended) → <strong>Play</strong> video</li>
               <li style={{ paddingLeft: '20px', listStyle: 'circle' }}><strong>Closed fist</strong> (fingers curled) → <strong>Pause</strong> video</li>
               <li><strong>Toggle "Gesture: Off"</strong> when dancing to avoid accidental triggers</li>
               <li>Click "Show Data" to see real-time position coordinates</li>
               <li>Click "Export Data" to download current positions as JSON</li>
+              */}
               <li>Stand 3-5 feet back for best full-body tracking</li>
+              <li>If a video URL is not supported, try downloading first and then upload from your computer</li>
             </ul>
           </div>
         )}
@@ -1248,7 +1261,7 @@ const PoseDetectorView = ({
                 }}>
                   {topImprovements.slice(0, 6).map((item, idx) => (
                     <div key={item.joint} style={{
-                      background: 'rgba(255, 255, 255, 0.1)',
+                      background: 'rgba(255, 255, 255, 0.15)',
                       padding: '12px',
                       borderRadius: '8px'
                     }}>
@@ -1353,7 +1366,7 @@ const PoseDetectorView = ({
 // StatCard component for game summary
 const StatCard = ({ label, value, color }) => (
   <div style={{
-    background: 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(255, 255, 255, 0.15)',
     padding: '20px',
     borderRadius: '12px',
     textAlign: 'center',

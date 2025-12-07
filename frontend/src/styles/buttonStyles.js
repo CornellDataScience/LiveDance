@@ -13,7 +13,7 @@ export const headerButtonStyle = {
   transition: 'background 0.2s'
 };
 
-export const getHeaderButtonBackground = (isActive, activeColor = '#38a169', inactiveColor = '#667eea') => {
+export const getHeaderButtonBackground = (isActive, activeColor = '#6F66C8', inactiveColor = '#6F66C8') => {
   return isActive ? activeColor : inactiveColor;
 };
 

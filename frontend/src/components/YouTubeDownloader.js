@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 /**
  * YouTubeDownloader - Component for downloading YouTube videos
@@ -9,38 +9,52 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [videoInfo, setVideoInfo] = useState(null);
+  const fileInputRef = useRef(null);
 
-  const handleGetInfo = async () => {
-    if (!url.trim()) {
-      setError('Please enter a YouTube URL');
+  const handleUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check if it's a video file
+    if (!file.type.startsWith('video/')) {
+      setError('Please select a video file');
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
+      setSuccess(null);
 
-      const response = await fetch('http://localhost:8000/video_info', {
+      const formData = new FormData();
+      formData.append('video', file);
+
+      const response = await fetch('http://localhost:8000/upload_video', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
+        body: formData,
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setVideoInfo(data);
+        setSuccess(`Uploaded: ${data.filename}`);
+        
+        // Notify parent component
+        if (onDownloadComplete) {
+          onDownloadComplete(data);
+        }
       } else {
-        setError(data.error || 'Failed to fetch video information');
+        setError(data.error || 'Failed to upload video');
       }
     } catch (err) {
       setError('Failed to connect to backend. Is the server running?');
-      console.error('Error fetching video info:', err);
+      console.error('Error uploading video:', err);
     } finally {
       setLoading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -70,7 +84,6 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
 
       if (data.success) {
         setSuccess(`Downloaded: ${data.title}`);
-        setVideoInfo(null);
         setUrl('');
 
         // Notify parent component
@@ -86,12 +99,6 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -112,14 +119,6 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         Download Dance Video
       </h3>
 
-      <p style={{
-        margin: '0 0 16px 0',
-        fontSize: '13px',
-        color: '#718096'
-      }}>
-        Paste a video URL from YouTube, YouTube Shorts, TikTok, Instagram, or 1000+ other platforms
-      </p>
-
       <div style={{ marginBottom: '16px' }}>
         <input
           type="text"
@@ -130,7 +129,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
               handleDownload();
             }
           }}
-          placeholder="Paste video URL (YouTube, YouTube Shorts, TikTok, Instagram, etc.)"
+          placeholder="Paste video URL (YouTube, TikTok, Instagram, etc.)"
           style={{
             width: '100%',
             padding: '12px',
@@ -146,13 +145,9 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         />
       </div>
 
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '16px'
-      }}>
+      <div style={{ display: 'flex', gap: '8px' }}>
         <button
-          onClick={handleGetInfo}
+          onClick={handleDownload}
           disabled={loading}
           style={{
             flex: 1,
@@ -167,22 +162,22 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = '#5568d3';
+            if (!loading) e.currentTarget.style.background = '#7c8ff0';
           }}
           onMouseLeave={(e) => {
             if (!loading) e.currentTarget.style.background = '#667eea';
           }}
         >
-          {loading ? 'Loading...' : 'Get Info'}
+          {loading ? 'Processing...' : 'Download'}
         </button>
 
         <button
-          onClick={handleDownload}
+          onClick={() => fileInputRef.current?.click()}
           disabled={loading}
           style={{
             flex: 1,
             padding: '12px',
-            background: loading ? '#cbd5e0' : '#38a169',
+            background: loading ? '#cbd5e0' : '#38B2AC',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
@@ -192,69 +187,34 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = '#2f855a';
+            if (!loading) e.currentTarget.style.background = '#4FD1C5';
           }}
           onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.background = '#38a169';
+            if (!loading) e.currentTarget.style.background = '#38B2AC';
           }}
         >
-          {loading ? 'Downloading...' : 'Download'}
+          Upload
         </button>
-      </div>
 
-      {/* Video Info Display */}
-      {videoInfo && (
-        <div style={{
-          padding: '16px',
-          background: '#f7fafc',
-          borderRadius: '8px',
-          marginBottom: '16px'
-        }}>
-          <h4 style={{
-            margin: '0 0 8px 0',
-            fontSize: '14px',
-            fontWeight: '600',
-            color: '#2d3748'
-          }}>
-            {videoInfo.title}
-          </h4>
-          <div style={{
-            fontSize: '12px',
-            color: '#718096',
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: '4px 12px'
-          }}>
-            {videoInfo.platform && (
-              <>
-                <span style={{ fontWeight: '500' }}>Platform:</span>
-                <span>{videoInfo.platform}</span>
-              </>
-            )}
-            <span style={{ fontWeight: '500' }}>Duration:</span>
-            <span>{formatDuration(videoInfo.duration)}</span>
-            <span style={{ fontWeight: '500' }}>Channel:</span>
-            <span>{videoInfo.uploader}</span>
-            {videoInfo.views > 0 && (
-              <>
-                <span style={{ fontWeight: '500' }}>Views:</span>
-                <span>{videoInfo.views?.toLocaleString()}</span>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          onChange={handleUpload}
+          style={{ display: 'none' }}
+        />
+      </div>
 
       {/* Error Message */}
       {error && (
         <div style={{
+          marginTop: '16px',
           padding: '12px',
           background: '#fff5f5',
           border: '1px solid #fc8181',
           borderRadius: '8px',
           color: '#c53030',
-          fontSize: '14px',
-          marginBottom: '16px'
+          fontSize: '14px'
         }}>
           {error}
         </div>
@@ -263,19 +223,19 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
       {/* Success Message */}
       {success && (
         <div style={{
+          marginTop: '16px',
           padding: '12px',
           background: '#f0fff4',
           border: '1px solid #68d391',
           borderRadius: '8px',
           color: '#2f855a',
-          fontSize: '14px',
-          marginBottom: '16px'
+          fontSize: '14px'
         }}>
           {success}
         </div>
       )}
 
-      {/* Instructions */}
+      {/* Instructions - commented out
       <div style={{
         padding: '12px',
         background: '#edf2f7',
@@ -287,17 +247,6 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         <div style={{ marginBottom: '12px', lineHeight: '1.6' }}>
           <strong>YouTube</strong> (including <strong>Shorts</strong>), <strong>TikTok</strong>*, <strong>Instagram</strong> (Reels), <strong>Twitter/X</strong>,
           <strong> Facebook</strong>, <strong>Vimeo</strong>, <strong>Reddit</strong>, and 1000+ more sites
-        </div>
-        <div style={{
-          fontSize: '11px',
-          color: '#718096',
-          marginBottom: '12px',
-          padding: '8px',
-          background: '#e6f7ff',
-          borderRadius: '4px',
-          border: '1px solid #91d5ff'
-        }}>
-          <strong>YouTube Shorts:</strong> Fully supported! Just paste the Shorts URL directly.
         </div>
         <div style={{
           fontSize: '11px',
@@ -320,6 +269,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
           <li>Works great with dance tutorials and performances!</li>
         </ul>
       </div>
+      */}
     </div>
   );
 };
