@@ -453,7 +453,23 @@ export const usePoseDetectorController = () => {
    * Compare current user pose with reference pose
    */
   const comparePoses = (userLandmarks, refLandmarks) => {
-    const userNormalized = normalizePose(userLandmarks);
+    const videoWidth = videoRef.current ? videoRef.current.videoWidth : 640;
+
+    const flippedUserLandmarks = userLandmarks.map(lm => {
+      let newName = lm.name;
+      if (lm.name.startsWith('left_')) {
+        newName = lm.name.replace('left_', 'right_');
+      } else if (lm.name.startsWith('right_')) {
+        newName = lm.name.replace('right_', 'left_');
+      }
+      return {
+        ...lm,
+        x: videoWidth - lm.x,
+        name: newName,
+      };
+    });
+
+    const userNormalized = normalizePose(flippedUserLandmarks);
     const refNormalized = normalizePose(refLandmarks);
 
     if (!userNormalized || !refNormalized) return null;
