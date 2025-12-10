@@ -1,4 +1,17 @@
 import React, { useState, useRef } from 'react';
+import {
+  MAIN_BLUE,
+  VIOLET_PRIMARY_HOVER,
+  GREEN_PRIMARY,
+  GREEN_PRIMARY_HOVER,
+  GRAY_DARK,
+  GRAY_LIGHT,
+  GREEN_BG_LIGHT,
+  GREEN_TEXT_DARK,
+  RED_BG_LIGHT,
+  RED_BORDER,
+  RED_TEXT_DARK
+} from '../styles/colors';
 
 /**
  * YouTubeDownloader - Component for downloading YouTube videos
@@ -114,7 +127,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         margin: '0 0 8px 0',
         fontSize: '18px',
         fontWeight: '600',
-        color: '#2d3748'
+        color: GRAY_DARK
       }}>
         Download Dance Video
       </h3>
@@ -134,14 +147,14 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             width: '100%',
             padding: '12px',
             fontSize: '14px',
-            border: '2px solid #e2e8f0',
+            border: `2px solid ${GRAY_LIGHT}`,
             borderRadius: '8px',
             outline: 'none',
             transition: 'border-color 0.2s',
             boxSizing: 'border-box'
           }}
-          onFocus={(e) => e.target.style.borderColor = '#667eea'}
-          onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+          onFocus={(e) => e.target.style.borderColor = MAIN_BLUE}
+          onBlur={(e) => e.target.style.borderColor = GRAY_LIGHT}
         />
       </div>
 
@@ -152,7 +165,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
           style={{
             flex: 1,
             padding: '12px',
-            background: loading ? '#cbd5e0' : '#667eea',
+            background: loading ? GRAY_LIGHT : MAIN_BLUE,
             color: 'white',
             border: 'none',
             borderRadius: '8px',
@@ -162,10 +175,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = '#7c8ff0';
+            if (!loading) e.currentTarget.style.background = VIOLET_PRIMARY_HOVER;
           }}
           onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.background = '#667eea';
+            if (!loading) e.currentTarget.style.background = MAIN_BLUE;
           }}
         >
           {loading ? 'Processing...' : 'Download'}
@@ -177,7 +190,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
           style={{
             flex: 1,
             padding: '12px',
-            background: loading ? '#cbd5e0' : '#38B2AC',
+            background: loading ? GRAY_LIGHT : GREEN_PRIMARY,
             color: 'white',
             border: 'none',
             borderRadius: '8px',
@@ -187,10 +200,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = '#4FD1C5';
+            if (!loading) e.currentTarget.style.background = GREEN_PRIMARY_HOVER;
           }}
           onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.background = '#38B2AC';
+            if (!loading) e.currentTarget.style.background = GREEN_PRIMARY;
           }}
         >
           Upload
@@ -210,10 +223,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         <div style={{
           marginTop: '16px',
           padding: '12px',
-          background: '#fff5f5',
-          border: '1px solid #fc8181',
+          background: RED_BG_LIGHT,
+          border: `1px solid ${RED_BORDER}`,
           borderRadius: '8px',
-          color: '#c53030',
+          color: RED_TEXT_DARK,
           fontSize: '14px'
         }}>
           {error}
@@ -225,10 +238,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         <div style={{
           marginTop: '16px',
           padding: '12px',
-          background: '#f0fff4',
-          border: '1px solid #68d391',
+          background: GREEN_BG_LIGHT,
+          border: `1px solid ${GREEN_PRIMARY_HOVER}`,
           borderRadius: '8px',
-          color: '#2f855a',
+          color: GREEN_TEXT_DARK,
           fontSize: '14px'
         }}>
           {success}
@@ -238,10 +251,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
       {/* Instructions - commented out
       <div style={{
         padding: '12px',
-        background: '#edf2f7',
+        background: GRAY_BG,
         borderRadius: '8px',
         fontSize: '12px',
-        color: '#4a5568'
+        color: GRAY_MEDIUM_DARK
       }}>
         <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>Supported Platforms:</p>
         <div style={{ marginBottom: '12px', lineHeight: '1.6' }}>
@@ -250,12 +263,12 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
         </div>
         <div style={{
           fontSize: '11px',
-          color: '#718096',
+          color: GRAY_MEDIUM,
           marginBottom: '12px',
           padding: '8px',
-          background: '#fff9e6',
+          background: YELLOW_BG_LIGHT,
           borderRadius: '4px',
-          border: '1px solid #ffd666'
+          border: `1px solid ${YELLOW_BORDER}`
         }}>
           <strong>TikTok Note:</strong> Some TikTok content may be restricted due to platform limitations.
           If download fails, try using a dedicated TikTok downloader or download from your browser.

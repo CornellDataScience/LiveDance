@@ -65,7 +65,7 @@
 │                                        ▼                                │
 │                         ┌──────────────────────────┐                   │
 │                         │  drawSkeleton()          │                   │
-│                         │  • Draw body (pink)      │                   │
+│                         │  • Draw body (pink_primary)      │                   │
 │                         │  • Draw hands (teal)     │                   │
 │                         │  • Draw connections      │                   │
 │                         └──────────────────────────┘                   │
@@ -237,14 +237,14 @@ Time (ms)  Frontend                   Buffer        Backend
 ────────────────────────────────────────────────────────────────────
 0          Capture frame
 2          Send via WebSocket ────────▶ put() ────▶ [waiting...]
-           
+
            Continue loop...
            getInterpolated()
            drawSkeleton()
 16         Capture frame (60 FPS)
 18         Send via WebSocket ────────▶ put() ────▶ [waiting...]
                                       (drops prev)
-           
+
 32         Capture frame
 34         Send via WebSocket ────────▶ put() ────▶ get() ────┐
                                                                │
@@ -267,8 +267,8 @@ Time (ms)  Frontend                   Buffer        Backend
 68         ◀──────────────────────────────────── Result! (30ms total)
            Update latestResult
            Continue interpolating...
-           
-           
+
+
 Timeline Summary:
 • Frontend sends every ~16ms (60 FPS)
 • Backend processes every ~40ms (24 FPS)
@@ -314,30 +314,33 @@ Timeline Summary:
 ## Why This Works
 
 ### ✅ No Timestamp Errors
+
 ```
 Backend generates monotonic timestamps:
   Frame 1: timestamp = 1000000
   Frame 2: timestamp = 1000001
   Frame 3: timestamp = 1000002
-  
+
 MediaPipe receives strictly increasing timestamps ✓
 No "packet timestamp mismatch" errors ✓
 ```
 
 ### ✅ No Buffer Overflow
+
 ```
 Buffer size = 1 (not 10, not 100, just 1)
-  
+
 When full: overwrite old frame
   put(frame_1) → buffer = [frame_1]
   put(frame_2) → buffer = [frame_2]  (frame_1 dropped)
   put(frame_3) → buffer = [frame_3]  (frame_2 dropped)
-  
+
 No unbounded growth ✓
 Intentional controlled dropping ✓
 ```
 
 ### ✅ Smooth Rendering
+
 ```
 Inference:  24 FPS (updates every ~40ms)
 Rendering:  60 FPS (updates every ~16ms)
@@ -348,7 +351,7 @@ Between inference results, interpolate:
   t=0.50 → 50% previous + 50% latest
   t=0.75 → 25% previous + 75% latest
   t=1.00 → 100% latest result
-  
+
 Smooth motion despite slower inference ✓
 ```
 
@@ -357,6 +360,7 @@ Smooth motion despite slower inference ✓
 ## Summary
 
 This architecture achieves:
+
 - ✅ **Stability:** No timestamp errors, no crashes
 - ✅ **Performance:** 40-60ms latency, ~24 FPS inference
 - ✅ **Quality:** Smooth 60 FPS rendering, EMA smoothing
@@ -364,4 +368,3 @@ This architecture achieves:
 - ✅ **Scalability:** Can handle faster inputs gracefully
 
 **Production ready!** 🚀
-

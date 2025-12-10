@@ -1,6 +1,22 @@
 import React from 'react';
 import ReferenceVideoPlayer from '../components/ReferenceVideoPlayer';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
+import {
+  BACK_PANE_OPACITY,
+  LAYERED_PANE_OPACITY,
+  MAIN_BLUE,
+  MAIN_PURPLE,
+  BLUE_PRIMARY,
+  BLUE_PRIMARY_HOVER,
+  GREEN_PRIMARY,
+  GREEN_PRIMARY_HOVER,
+  GREEN_GOOD,
+  ORANGE_PRIMARY,
+  RED_PRIMARY,
+  PINK_PRIMARY,
+  GOLD_PRIMARY,
+  GRAY_MEDIUM
+} from '../styles/colors';
 
 /**
  * View: Pure UI component for pose detection display
@@ -56,7 +72,7 @@ const PoseDetectorView = ({
   return (
     <div style={{ 
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: `linear-gradient(135deg, ${MAIN_BLUE} 0%, ${MAIN_PURPLE} 100%)`,
       padding: '40px 20px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
@@ -215,19 +231,19 @@ const PoseDetectorView = ({
               padding: '14px 28px',
               fontSize: '18px',
               fontWeight: '600',
-              background: '#38B2AC',
+              background: GREEN_PRIMARY,
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(56, 178, 172, 0.3)',
+              boxShadow: '0 4px 12px rgba(72, 187, 120, 0.3)',
               transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#4FD1C5';
+              e.currentTarget.style.background = GREEN_PRIMARY_HOVER;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#38B2AC';
+              e.currentTarget.style.background = GREEN_PRIMARY;
             }}
           >
             Start Game Session
@@ -518,9 +534,9 @@ const PoseDetectorView = ({
                       transform: 'translate(-50%, -50%)',
                       fontSize: '48px',
                       fontWeight: '700',
-                      color: currentClassification === 'great' ? '#48bb78' :
-                             currentClassification === 'good' ? '#38a169' :
-                             currentClassification === 'mid' ? '#ed8936' : '#e53e3e',
+                      color: currentClassification === 'great' ? GREEN_PRIMARY :
+                             currentClassification === 'good' ? GREEN_GOOD :
+                             currentClassification === 'mid' ? ORANGE_PRIMARY : RED_PRIMARY,
                       textShadow: '0 4px 8px rgba(0, 0, 0, 0.8)',
                       animation: 'fadeInOut 1s ease-in-out',
                       zIndex: 10,
@@ -538,7 +554,7 @@ const PoseDetectorView = ({
                       left: '20px',
                       fontSize: '32px',
                       fontWeight: '700',
-                      color: '#ffd700',
+                      color: GOLD_PRIMARY,
                       textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
                       pointerEvents: 'none'
                     }}>
@@ -576,7 +592,7 @@ const PoseDetectorView = ({
         }}>
         {/* Reference Video Player */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.15)',
+          background: `rgba(255, 255, 255, ${BACK_PANE_OPACITY})`,
           backdropFilter: 'blur(10px)',
           borderRadius: '20px',
           padding: '24px',
@@ -596,7 +612,7 @@ const PoseDetectorView = ({
 
         {/* Camera Feed & Skeleton */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.15)',
+          background: `rgba(255, 255, 255, ${BACK_PANE_OPACITY})`,
           backdropFilter: 'blur(10px)',
           borderRadius: '20px',
           padding: '24px',
@@ -624,7 +640,7 @@ const PoseDetectorView = ({
                 background: getHeaderButtonBackground(cameraEnabled)
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#8078D4';
+                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = getHeaderButtonBackground(cameraEnabled);
@@ -716,13 +732,13 @@ const PoseDetectorView = ({
       )}
 
       {/* Top 10 Improvements Panel */}
-      {isReady && !gameSessionActive && !showGameSummary && topImprovements && topImprovements.length > 0 && (
+      {isReady && !gameSessionActive && !showGameSummary && referenceVideo && cameraEnabled && topImprovements && topImprovements.length > 0 && (
         <div style={{
           maxWidth: '1400px',
           margin: '20px auto 0'
         }}>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.15)',
+            background: `rgba(255, 255, 255, ${BACK_PANE_OPACITY})`,
             backdropFilter: 'blur(10px)',
             borderRadius: '20px',
             padding: '24px',
@@ -745,9 +761,9 @@ const PoseDetectorView = ({
               </h3>
               {overallScore !== null && (
                 <div style={{
-                  background: overallScore >= 80 ? 'rgba(72, 187, 120, 0.3)' :
-                             overallScore >= 60 ? 'rgba(237, 137, 54, 0.3)' :
-                             'rgba(245, 101, 101, 0.3)',
+                  background: overallScore >= 80 ? `${GREEN_PRIMARY}4D` :
+                             overallScore >= 60 ? `${ORANGE_PRIMARY}4D` :
+                             `${RED_PRIMARY}4D`,
                   padding: '8px 16px',
                   borderRadius: '8px',
                   color: 'white',
@@ -764,59 +780,118 @@ const PoseDetectorView = ({
               gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
               gap: '12px'
             }}>
-              {topImprovements.map((item, idx) => (
+              {topImprovements.slice(0, 7).map((item, idx) => (
                 <div key={item.joint} style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
+                  background: `rgba(255, 255, 255, ${LAYERED_PANE_OPACITY})`,
+                  backdropFilter: 'blur(10px)',
                   borderRadius: '12px',
-                  padding: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                  padding: idx === 0 ? '24px' : '16px',
+                  border: idx === 0 ? '1px solid rgba(255, 255, 255, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  gridColumn: idx === 0 ? 'span 2' : 'auto',
+                  gridRow: idx === 0 ? 'span 2' : 'auto',
+                  display: idx === 0 ? 'flex' : 'block',
+                  flexDirection: idx === 0 ? 'column' : 'initial',
+                  justifyContent: idx === 0 ? 'center' : 'initial',
+                  alignItems: idx === 0 ? 'stretch' : 'initial'
                 }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '8px'
-                  }}>
-                    <span style={{
-                      color: 'white',
-                      fontWeight: '600',
-                      fontSize: '14px'
-                    }}>
-                      #{idx + 1} {item.name}
-                    </span>
-                    <span style={{
-                      color: item.score >= 80 ? '#48bb78' :
-                             item.score >= 60 ? '#ed8936' :
-                             '#f56565',
-                      fontWeight: '600',
-                      fontSize: '14px'
-                    }}>
-                      {item.score}%
-                    </span>
-                  </div>
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.15)',
-                    borderRadius: '4px',
-                    height: '6px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${item.score}%`,
-                      height: '100%',
-                      background: item.score >= 80 ? '#48bb78' :
-                                  item.score >= 60 ? '#ed8936' :
-                                  '#f56565',
-                      transition: 'width 0.3s ease'
-                    }} />
-                  </div>
-                  <div style={{
-                    marginTop: '8px',
-                    fontSize: '12px',
-                    color: 'rgba(255, 255, 255, 0.9)',
-                    fontStyle: 'italic'
-                  }}>
-                    {item.recommendation}
-                  </div>
+                  {idx === 0 ? (
+                    // Centered layout for #1 biggest improvement
+                    <>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '12px'
+                      }}>
+                        <div style={{
+                          color: 'white',
+                          fontWeight: '700',
+                          fontSize: '36px'
+                        }}>
+                          #{idx + 1} {item.name}
+                        </div>
+                        <div style={{
+                          color: 'white',
+                          fontWeight: '600',
+                          fontSize: '28px'
+                        }}>
+                          {item.score}%
+                        </div>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        borderRadius: '4px',
+                        height: '10px',
+                        overflow: 'hidden',
+                        marginBottom: '16px'
+                      }}>
+                        <div style={{
+                          width: `${item.score}%`,
+                          height: '100%',
+                          background: item.score >= 80 ? GREEN_PRIMARY :
+                                      item.score >= 60 ? ORANGE_PRIMARY :
+                                      RED_PRIMARY,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div style={{
+                        fontSize: '32px',
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        fontStyle: 'italic',
+                        fontWeight: '600'
+                      }}>
+                        {item.recommendation}
+                      </div>
+                    </>
+                  ) : (
+                    // Regular layout for other improvements
+                    <>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '8px'
+                      }}>
+                        <span style={{
+                          color: 'white',
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          #{idx + 1} {item.name}
+                        </span>
+                        <span style={{
+                          color: 'white',
+                          fontWeight: '600',
+                          fontSize: '14px'
+                        }}>
+                          {item.score}%
+                        </span>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        borderRadius: '4px',
+                        height: '6px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${item.score}%`,
+                          height: '100%',
+                          background: item.score >= 80 ? GREEN_PRIMARY :
+                                      item.score >= 60 ? ORANGE_PRIMARY :
+                                      RED_PRIMARY,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div style={{
+                        marginTop: '8px',
+                        fontSize: '12px',
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        fontStyle: 'italic'
+                      }}>
+                        {item.recommendation}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -831,7 +906,7 @@ const PoseDetectorView = ({
           margin: '20px auto 0'
         }}>
           <div style={{
-            background: 'rgba(255, 255, 255, 0.15)',
+            background: `rgba(255, 255, 255, ${BACK_PANE_OPACITY})`,
             backdropFilter: 'blur(10px)',
             borderRadius: '20px',
             padding: '24px',
@@ -1081,9 +1156,9 @@ const PoseDetectorView = ({
         {!showData && (
           <div style={{
             padding: '24px',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: `rgba(255, 255, 255, ${LAYERED_PANE_OPACITY})`,
             backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
             borderRadius: '16px',
             color: 'white'
           }}>
@@ -1105,7 +1180,7 @@ const PoseDetectorView = ({
                   borderRadius: '50%',
                   marginRight: '8px'
                 }}></div>
-                <strong>Body (Pink):</strong> {bodyLandmarks.filter(lm => lm.visible).length} points tracked
+                <strong>Body (PINK_PRIMARY):</strong> {bodyLandmarks.filter(lm => lm.visible).length} points tracked
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ 
@@ -1127,7 +1202,7 @@ const PoseDetectorView = ({
                   borderRadius: '50%',
                   marginRight: '8px'
                 }}></div>
-                <strong>3D Angles (Gold):</strong> {Object.keys(pose3DAngles).length} joints tracked
+                <strong>3D Angles (GOLD_PRIMARY):</strong> {Object.keys(pose3DAngles).length} joints tracked
               </div>
             </div>
             */}
@@ -1178,7 +1253,7 @@ const PoseDetectorView = ({
           padding: '40px'
         }}>
           <div style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: `linear-gradient(135deg, ${MAIN_BLUE} 0%, ${MAIN_PURPLE} 100%)`,
             borderRadius: '24px',
             padding: '48px',
             maxWidth: '800px',
@@ -1195,11 +1270,11 @@ const PoseDetectorView = ({
               <div style={{
                 fontSize: '96px',
                 fontWeight: '700',
-                color: gameResults.grade === 'INCOMPLETE' ? '#9ca3af' :
-                       gameResults.grade === 'SS' || gameResults.grade === 'S' ? '#ffd700' :
-                       gameResults.grade === 'A' ? '#48bb78' :
-                       gameResults.grade === 'B' ? '#38a169' :
-                       gameResults.grade === 'C' ? '#ed8936' : '#e53e3e',
+                color: gameResults.grade === 'INCOMPLETE' ? GRAY_MEDIUM :
+                       gameResults.grade === 'SS' || gameResults.grade === 'S' ? GOLD_PRIMARY :
+                       gameResults.grade === 'A' ? GREEN_PRIMARY :
+                       gameResults.grade === 'B' ? GREEN_GOOD :
+                       gameResults.grade === 'C' ? ORANGE_PRIMARY : RED_PRIMARY,
                 textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
                 marginBottom: '16px'
               }}>
@@ -1230,15 +1305,15 @@ const PoseDetectorView = ({
               gap: '16px',
               marginBottom: '32px'
             }}>
-              <StatCard label="Greats" value={gameResults.greatCount} color="#48bb78" />
-              <StatCard label="Goods" value={gameResults.goodCount} color="#38a169" />
-              <StatCard label="Mids" value={gameResults.midCount} color="#ed8936" />
-              <StatCard label="Misses" value={gameResults.missCount} color="#e53e3e" />
-              <StatCard label="Max Combo" value={gameResults.maxCombo} color="#ffd700" />
+              <StatCard label="Greats" value={gameResults.greatCount} color={GREEN_PRIMARY} />
+              <StatCard label="Goods" value={gameResults.goodCount} color={GREEN_GOOD} />
+              <StatCard label="Mids" value={gameResults.midCount} color={ORANGE_PRIMARY} />
+              <StatCard label="Misses" value={gameResults.missCount} color={RED_PRIMARY} />
+              <StatCard label="Max Combo" value={gameResults.maxCombo} color={GOLD_PRIMARY} />
               <StatCard label="Total" value={
                 gameResults.missCount + gameResults.midCount +
                 gameResults.goodCount + gameResults.greatCount
-              } color="#667eea" />
+              } color={BLUE_PRIMARY} />
             </div>
 
             {/* Areas to Improve */}
@@ -1297,7 +1372,7 @@ const PoseDetectorView = ({
                   padding: '16px 32px',
                   fontSize: '16px',
                   fontWeight: '600',
-                  background: '#667eea',
+                  background: BLUE_PRIMARY,
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
@@ -1312,7 +1387,7 @@ const PoseDetectorView = ({
                   padding: '16px 32px',
                   fontSize: '16px',
                   fontWeight: '600',
-                  background: '#38a169',
+                  background: GREEN_GOOD,
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
@@ -1327,7 +1402,7 @@ const PoseDetectorView = ({
                   padding: '16px 32px',
                   fontSize: '16px',
                   fontWeight: '600',
-                  background: '#e53e3e',
+                  background: RED_PRIMARY,
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
