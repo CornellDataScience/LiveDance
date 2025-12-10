@@ -804,14 +804,14 @@ const PoseDetectorView = ({
                         marginBottom: '12px'
                       }}>
                         <div style={{
-                          color: 'white',
+                          color: '#1a202c',
                           fontWeight: '700',
                           fontSize: '36px'
                         }}>
                           #{idx + 1} {item.name}
                         </div>
                         <div style={{
-                          color: 'white',
+                          color: '#1a202c',
                           fontWeight: '600',
                           fontSize: '28px'
                         }}>
@@ -836,7 +836,7 @@ const PoseDetectorView = ({
                       </div>
                       <div style={{
                         fontSize: '32px',
-                        color: 'rgba(255, 255, 255, 0.9)',
+                        color: '#2d3748',
                         fontStyle: 'italic',
                         fontWeight: '600'
                       }}>
@@ -853,14 +853,14 @@ const PoseDetectorView = ({
                         marginBottom: '8px'
                       }}>
                         <span style={{
-                          color: 'white',
+                          color: '#1a202c',
                           fontWeight: '600',
                           fontSize: '14px'
                         }}>
                           #{idx + 1} {item.name}
                         </span>
                         <span style={{
-                          color: 'white',
+                          color: '#1a202c',
                           fontWeight: '600',
                           fontSize: '14px'
                         }}>
@@ -885,7 +885,7 @@ const PoseDetectorView = ({
                       <div style={{
                         marginTop: '8px',
                         fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.9)',
+                        color: '#4a5568',
                         fontStyle: 'italic'
                       }}>
                         {item.recommendation}
@@ -1343,14 +1343,14 @@ const PoseDetectorView = ({
                       <div style={{
                         fontSize: '14px',
                         fontWeight: '600',
-                        color: 'white',
+                        color: '#1a202c',
                         marginBottom: '4px'
                       }}>
                         #{idx + 1} {item.name}
                       </div>
                       <div style={{
                         fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.8)'
+                        color: '#2d3748'
                       }}>
                         {item.recommendation}
                       </div>
