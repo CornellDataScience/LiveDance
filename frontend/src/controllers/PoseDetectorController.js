@@ -78,7 +78,7 @@ export const usePoseDetectorController = () => {
   const MAX_BUFFER_SIZE = 120;  // Keep last 2 seconds at 60 FPS
 
   // Similarity scoring configuration
-  const SIMILARITY_STEEPNESS = 0.8;  // More lenient scoring: score = 100 * exp(-STEEPNESS * distance)
+  const SIMILARITY_STEEPNESS = 0.75;  // More lenient scoring: score = 100 * exp(-STEEPNESS * distance)
   const CRITICAL_JOINT_MIN_SCORE = 5;  // Critical joints must score at least 5/100 (very lenient)
   const CRITICAL_JOINT_PENALTY = 0.95;  // Multiply score by 0.95 if critical joints fail (minimal penalty)
 
@@ -86,7 +86,7 @@ export const usePoseDetectorController = () => {
   const userPoseHistoryRef = useRef([]);  // Track recent user poses
   const MOVEMENT_DETECTION_FRAMES = 120;  // Check movement over last 120 frames (~2s at 60fps)
   const STATIC_POSE_THRESHOLD = 0.05;  // If average joint movement < 0.05 shoulder-widths, pose is static
-  const STATIC_POSE_PENALTY = 0;  // DISABLED - No penalty for standing still
+  const STATIC_POSE_PENALTY = 20;  // Deduct 20 points for standing still
 
   // Game session state
   const [gameSessionActive, setGameSessionActive] = useState(false);
@@ -713,8 +713,8 @@ export const usePoseDetectorController = () => {
       // Determine classification based on overall score
       let classification;
       if (overall < 40) classification = 'miss';
-      else if (overall < 60) classification = 'mid';
-      else if (overall < 80) classification = 'good';
+      else if (overall < 55) classification = 'mid';
+      else if (overall < 75) classification = 'good';
       else classification = 'great';
 
       // Update game stats
