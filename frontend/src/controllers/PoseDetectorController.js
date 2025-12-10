@@ -595,10 +595,10 @@ export const usePoseDetectorController = () => {
     if (gameSessionActive && videoPlaying && overall !== null) {
       // Determine classification based on overall score
       let classification;
-      if (overall < 40) classification = 'miss';
-      else if (overall < 60) classification = 'mid';
-      else if (overall < 80) classification = 'good';
-      else classification = 'great';
+      if (overall >= 90) classification = 'great';
+      else if (overall >= 75) classification = 'good';
+      else if (overall >= 50) classification = 'mid';
+      else classification = 'miss';
 
       // Update game stats
       const stats = gameStatsRef.current;

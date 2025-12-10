@@ -39,13 +39,20 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   // Also clear canvas immediately when hiding skeleton
   useEffect(() => {
     showSkeletonRef.current = showSkeleton;
-    
+
     // Clear canvas when hiding skeleton
     if (!showSkeleton && canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
   }, [showSkeleton]);
+
+  // Disable skeleton in game mode
+  useEffect(() => {
+    if (gameMode) {
+      setShowSkeleton(false);
+    }
+  }, [gameMode]);
 
   /**
    * Fetch available videos from backend

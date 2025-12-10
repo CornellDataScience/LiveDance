@@ -776,8 +776,9 @@ const PoseDetectorView = ({
               </h3>
               {overallScore !== null && (
                 <div style={{
-                  background: overallScore >= 80 ? `${GREEN_PRIMARY}5D` :
-                             overallScore >= 60 ? `${ORANGE_PRIMARY}5D` :
+                  background: overallScore >= 90 ? `${GREEN_PRIMARY}5D` :
+                             overallScore >= 75 ? `${GREEN_GOOD}5D` :
+                             overallScore >= 50 ? `${ORANGE_PRIMARY}5D` :
                              `${RED_PRIMARY}5D`,
                   padding: '8px 16px',
                   borderRadius: '8px',
@@ -1321,15 +1322,50 @@ const PoseDetectorView = ({
               gap: '16px',
               marginBottom: '32px'
             }}>
-              <StatCard label="Greats" value={gameResults.greatCount} color={GREEN_PRIMARY} />
-              <StatCard label="Goods" value={gameResults.goodCount} color={GREEN_GOOD} />
-              <StatCard label="Mids" value={gameResults.midCount} color={ORANGE_PRIMARY} />
-              <StatCard label="Misses" value={gameResults.missCount} color={RED_PRIMARY} />
-              <StatCard label="Max Combo" value={gameResults.maxCombo} color={GOLD_PRIMARY} />
-              <StatCard label="Total" value={
-                gameResults.missCount + gameResults.midCount +
-                gameResults.goodCount + gameResults.greatCount
-              } color={BLUE_PRIMARY} />
+              {(() => {
+                const total = gameResults.missCount + gameResults.midCount +
+                             gameResults.goodCount + gameResults.greatCount;
+                const getPercentage = (count) => total > 0 ? Math.round((count / total) * 100) : 0;
+
+                return (
+                  <>
+                    <StatCard
+                      label="Greats"
+                      value={gameResults.greatCount}
+                      color={GREEN_PRIMARY}
+                      percentage={getPercentage(gameResults.greatCount)}
+                    />
+                    <StatCard
+                      label="Goods"
+                      value={gameResults.goodCount}
+                      color={GREEN_GOOD}
+                      percentage={getPercentage(gameResults.goodCount)}
+                    />
+                    <StatCard
+                      label="Mids"
+                      value={gameResults.midCount}
+                      color={ORANGE_PRIMARY}
+                      percentage={getPercentage(gameResults.midCount)}
+                    />
+                    <StatCard
+                      label="Misses"
+                      value={gameResults.missCount}
+                      color={RED_PRIMARY}
+                      percentage={getPercentage(gameResults.missCount)}
+                    />
+                    <StatCard
+                      label="Max Combo"
+                      value={gameResults.maxCombo}
+                      color={GOLD_PRIMARY}
+                    />
+                    <StatCard
+                      label="Total"
+                      value={total}
+                      color={BLUE_PRIMARY}
+                    />
+                  </>
+                );
+              })()}
             </div>
 
             {/* Areas to Improve - REMOVED */}
@@ -1340,28 +1376,6 @@ const PoseDetectorView = ({
               gap: '16px',
               justifyContent: 'center'
             }}>
-              <button
-                onClick={exportGameData}
-                style={{
-                  padding: '16px 32px',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  background: BLUE_PRIMARY,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'brightness(1)';
-                }}
-              >
-                Export JSON
-              </button>
               <button
                 onClick={resetGameSession}
                 style={{
@@ -1434,13 +1448,17 @@ const PoseDetectorView = ({
 };
 
 // StatCard component for game summary
-const StatCard = ({ label, value, color }) => (
+const StatCard = ({ label, value, color, percentage }) => (
   <div style={{
     background: 'rgba(255, 255, 255, 0.15)',
     padding: '20px',
     borderRadius: '12px',
     textAlign: 'center',
-    border: `2px solid ${color}`
+    border: `2px solid ${color}`,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center'
   }}>
     <div style={{
       fontSize: '32px',
@@ -1450,6 +1468,16 @@ const StatCard = ({ label, value, color }) => (
     }}>
       {value}
     </div>
+    {percentage !== undefined && (
+      <div style={{
+        fontSize: '16px',
+        color: color,
+        fontWeight: '600',
+        marginBottom: '4px'
+      }}>
+        {percentage}%
+      </div>
+    )}
     <div style={{
       fontSize: '14px',
       color: 'white',
