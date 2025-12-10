@@ -77,6 +77,17 @@ export const usePoseDetectorController = () => {
   const referencePoseBufferRef = useRef([]);  // Buffer of recent reference poses with timestamps
   const MAX_BUFFER_SIZE = 120;  // Keep last 2 seconds at 60 FPS
 
+  // Similarity scoring configuration
+  const SIMILARITY_STEEPNESS = 0.8;  // More lenient scoring: score = 100 * exp(-STEEPNESS * distance)
+  const CRITICAL_JOINT_MIN_SCORE = 5;  // Critical joints must score at least 5/100 (very lenient)
+  const CRITICAL_JOINT_PENALTY = 0.95;  // Multiply score by 0.95 if critical joints fail (minimal penalty)
+
+  // Movement detection to prevent static pose exploitation
+  const userPoseHistoryRef = useRef([]);  // Track recent user poses
+  const MOVEMENT_DETECTION_FRAMES = 120;  // Check movement over last 120 frames (~2s at 60fps)
+  const STATIC_POSE_THRESHOLD = 0.05;  // If average joint movement < 0.05 shoulder-widths, pose is static
+  const STATIC_POSE_PENALTY = 0;  // DISABLED - No penalty for standing still
+
   // Game session state
   const [gameSessionActive, setGameSessionActive] = useState(false);
   const [showGameSummary, setShowGameSummary] = useState(false);
@@ -123,39 +134,40 @@ export const usePoseDetectorController = () => {
   // Importance weights for each joint in pose comparison
   // Higher weight = more important for dance quality
   // Optimized for dance styles like K-pop, hip-hop, and TikTok dances
+  // Balanced weights: arms and legs equally important for expressive dancing
   const JOINT_WEIGHTS = {
     // Upper body - most visible and expressive
-    'left_wrist': 1.5,      // Most important - hand positions are most noticeable
-    'right_wrist': 1.5,
-    'left_elbow': 1.3,      // Very important - controls arm shape
-    'right_elbow': 1.3,
-    'left_shoulder': 1.4,   // Very important - defines posture and frame
-    'right_shoulder': 1.4,
+    'left_wrist': 2.0,      // Critical - hand positions are most noticeable and expressive
+    'right_wrist': 2.0,
+    'left_elbow': 1.8,      // High - controls arm shape and movement
+    'right_elbow': 1.8,
+    'left_shoulder': 1.0,   // Neutral - usually follows arm movement
+    'right_shoulder': 1.0,
 
-    // Core - foundation of the pose
-    'left_hip': 1.4,        // Very important - defines stance
-    'right_hip': 1.4,
+    // Core - foundation but less expressive
+    'left_hip': 1.0,        // Neutral - usually follows leg movement
+    'right_hip': 1.0,
 
-    // Lower body - important but less expressive
-    'left_knee': 1.2,       // Important - controls leg position
-    'right_knee': 1.2,
-    'left_ankle': 1.0,      // Neutral - feet placement
-    'right_ankle': 1.0,
+    // Lower body - important but balanced with arms
+    'left_knee': 1.8,       // High - leg position is important for dance (balanced with elbows)
+    'right_knee': 1.8,
+    'left_ankle': 1.6,      // High - footwork precision matters
+    'right_ankle': 1.6,
 
-    // Head - usually follows body, less critical
-    'nose': 0.8,            // Minor importance
-    'left_eye': 0.6,        // Very minor - usually just tracks with head
-    'right_eye': 0.6,
-    'left_ear': 0.6,
-    'right_ear': 0.6
+    // Head - usually follows body, minimal importance
+    'nose': 0.5,            // Low importance - mostly redundant
+    'left_eye': 0.3,        // Minimal - tracks with head
+    'right_eye': 0.3,
+    'left_ear': 0.3,
+    'right_ear': 0.3
   };
 
   // Importance level thresholds for feedback
   const IMPORTANCE_LEVELS = {
-    CRITICAL: 1.4,   // >= 1.4
-    HIGH: 1.2,       // >= 1.2
-    MEDIUM: 1.0,     // >= 1.0
-    LOW: 0.0         // < 1.0
+    CRITICAL: 2.0,   // >= 2.0 (wrists - hands are most expressive)
+    HIGH: 1.6,       // >= 1.8 (elbows, knees, ankles - arms and legs)
+    MEDIUM: 1.0,     // >= 1.0 (shoulders, hips)
+    LOW: 0.0         // < 1.0 (face features)
   };
 
   // Performance metrics state
@@ -367,18 +379,23 @@ export const usePoseDetectorController = () => {
 
   /**
    * Calculate similarity score for each joint (0-100) with directional data
+   * Includes penalties for missing critical joints
    */
   const calculateJointSimilarity = (userPose, refPose) => {
     if (!userPose || !refPose) return {};
 
     const similarities = {};
+
+    // Compare joints that are visible in user pose
     Object.keys(userPose).forEach(jointName => {
       if (refPose[jointName]) {
         const dx = userPose[jointName].x - refPose[jointName].x;
         const dy = userPose[jointName].y - refPose[jointName].y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        // Convert to similarity score (0-100)
-        const similarity = 100 * Math.exp(-distance);
+        // Convert to similarity score (0-100) with steeper penalty
+        // Using exponential with multiplier: score = 100 * exp(-STEEPNESS * distance)
+        // Higher steepness = stricter scoring (3x means distance 0.5 gives score ~22 instead of ~61)
+        const similarity = 100 * Math.exp(-SIMILARITY_STEEPNESS * distance);
         similarities[jointName] = {
           score: Math.round(similarity * 10) / 10,
           dx: dx,
@@ -387,7 +404,79 @@ export const usePoseDetectorController = () => {
       }
     });
 
+    // Penalize missing critical joints (present in reference but not in user pose)
+    Object.keys(refPose).forEach(jointName => {
+      if (!userPose[jointName]) {
+        // Joint is missing from user pose - apply penalty based on importance
+        const weight = JOINT_WEIGHTS[jointName] || 1.0;
+
+        // Only penalize if joint is important (weight >= 1.0)
+        // Higher weight = more severe penalty (lower score)
+        if (weight >= 1.0) {
+          // Critical joints (weight >= 1.6) get score of 0
+          // Important joints (1.4 <= weight < 1.6) get score of 10
+          // Medium joints (1.0 <= weight < 1.4) get score of 20
+          let penaltyScore;
+          if (weight >= 1.6) {
+            penaltyScore = 0;  // Critical - complete penalty
+          } else if (weight >= 1.4) {
+            penaltyScore = 10;  // Important - severe penalty
+          } else {
+            penaltyScore = 20;  // Medium - moderate penalty
+          }
+
+          similarities[jointName] = {
+            score: penaltyScore,
+            dx: 0,  // No directional data for missing joints
+            dy: 0,
+            missing: true  // Flag to indicate this is a missing joint penalty
+          };
+        }
+      }
+    });
+
     return similarities;
+  };
+
+  /**
+   * Detect if user is standing still (static pose)
+   * Returns penalty score (0 if moving, STATIC_POSE_PENALTY if static)
+   */
+  const detectStaticPose = () => {
+    // Need enough history to detect movement
+    if (userPoseHistoryRef.current.length < MOVEMENT_DETECTION_FRAMES) {
+      return 0;  // Not enough data yet, don't penalize
+    }
+
+    // Get first and last poses in history
+    const firstPose = userPoseHistoryRef.current[0];
+    const lastPose = userPoseHistoryRef.current[userPoseHistoryRef.current.length - 1];
+
+    if (!firstPose || !lastPose) return 0;
+
+    // Calculate average movement across all joints
+    const jointNames = Object.keys(lastPose);
+    let totalMovement = 0;
+    let jointCount = 0;
+
+    jointNames.forEach(jointName => {
+      if (firstPose[jointName] && lastPose[jointName]) {
+        const dx = lastPose[jointName].x - firstPose[jointName].x;
+        const dy = lastPose[jointName].y - firstPose[jointName].y;
+        const movement = Math.sqrt(dx * dx + dy * dy);
+        totalMovement += movement;
+        jointCount++;
+      }
+    });
+
+    const avgMovement = jointCount > 0 ? totalMovement / jointCount : 0;
+
+    // If average movement is below threshold, user is standing still
+    if (avgMovement < STATIC_POSE_THRESHOLD) {
+      return STATIC_POSE_PENALTY;  // Apply penalty
+    }
+
+    return 0;  // User is moving, no penalty
   };
 
   /**
@@ -455,6 +544,15 @@ export const usePoseDetectorController = () => {
 
     if (!userNormalized || !refNormalized) return null;
 
+    // Track normalized user pose for movement detection
+    if (userNormalized) {
+      userPoseHistoryRef.current.push(userNormalized);
+      // Keep only recent frames
+      if (userPoseHistoryRef.current.length > MOVEMENT_DETECTION_FRAMES) {
+        userPoseHistoryRef.current.shift();
+      }
+    }
+
     return calculateJointSimilarity(userNormalized, refNormalized);
   };
 
@@ -477,6 +575,7 @@ export const usePoseDetectorController = () => {
     const jointCounts = {};
     const jointDxTotals = {};
     const jointDyTotals = {};
+    const jointMissingCounts = {};  // Track how often joints are missing
     let timingOffsetTotal = 0;
     let timingOffsetCount = 0;
 
@@ -496,11 +595,17 @@ export const usePoseDetectorController = () => {
           jointCounts[joint] = 0;
           jointDxTotals[joint] = 0;
           jointDyTotals[joint] = 0;
+          jointMissingCounts[joint] = 0;
         }
         jointTotals[joint] += data.score;
         jointDxTotals[joint] += data.dx;
         jointDyTotals[joint] += data.dy;
         jointCounts[joint] += 1;
+
+        // Track if this joint was missing
+        if (data.missing) {
+          jointMissingCounts[joint] += 1;
+        }
       });
     });
 
@@ -523,29 +628,69 @@ export const usePoseDetectorController = () => {
     const sortedJoints = Object.entries(avgScores).sort((a, b) => a[1] - b[1]);
 
     // Get top 10 areas needing improvement with directional recommendations
-    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => ({
-      joint: jointName,
-      name: BODY_PART_NAMES[jointName] || jointName,
-      score: score,
-      improvementNeeded: Math.round((100 - score) * 10) / 10,
-      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName),
-      weight: JOINT_WEIGHTS[jointName] || 1.0,
-      importance: getImportanceLevel(jointName)
-    }));
+    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => {
+      // Check if this joint was frequently missing
+      const missingPercent = jointMissingCounts[jointName]
+        ? Math.round((jointMissingCounts[jointName] / jointCounts[jointName]) * 100)
+        : 0;
+
+      let recommendation;
+      if (missingPercent > 50) {
+        // Joint was missing more than half the time - provide visibility feedback
+        recommendation = `Keep ${BODY_PART_NAMES[jointName] || jointName} visible to camera`;
+      } else if (missingPercent > 0) {
+        // Joint was occasionally missing
+        recommendation = `${getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName)} (occluded ${missingPercent}% of time)`;
+      } else {
+        // Normal directional recommendation
+        recommendation = getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName);
+      }
+
+      return {
+        joint: jointName,
+        name: BODY_PART_NAMES[jointName] || jointName,
+        score: score,
+        improvementNeeded: Math.round((100 - score) * 10) / 10,
+        recommendation: recommendation,
+        weight: JOINT_WEIGHTS[jointName] || 1.0,
+        importance: getImportanceLevel(jointName),
+        missingPercent: missingPercent
+      };
+    });
 
     // Calculate overall score using weighted mean
     let weightedSum = 0;
     let totalWeight = 0;
+    let criticalJointsFailed = false;
 
     Object.entries(avgScores).forEach(([joint, score]) => {
       const weight = JOINT_WEIGHTS[joint] || 1.0;  // Default to 1.0 if joint not in weights
       weightedSum += score * weight;
       totalWeight += weight;
+
+      // Check if critical joints meet minimum threshold
+      if (weight >= 1.6 && score < CRITICAL_JOINT_MIN_SCORE) {
+        criticalJointsFailed = true;
+      }
     });
 
-    const overall = totalWeight > 0
+    let overall = totalWeight > 0
       ? Math.round((weightedSum / totalWeight) * 10) / 10
       : 0;
+
+    const baseScore = overall;
+
+    // Apply critical joint failure penalty
+    if (criticalJointsFailed) {
+      overall = Math.round(overall * CRITICAL_JOINT_PENALTY * 10) / 10;
+    }
+
+    // Detect static pose and apply penalty
+    const staticPenalty = detectStaticPose();
+
+    if (staticPenalty > 0) {
+      overall = Math.max(0, overall - staticPenalty);  // Deduct penalty, min 0
+    }
 
     setTopImprovements(improvements);
     setOverallScore(overall);
