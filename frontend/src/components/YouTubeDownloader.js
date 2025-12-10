@@ -1,16 +1,15 @@
 import React, { useState, useRef } from 'react';
 import {
   MAIN_BLUE,
-  VIOLET_PRIMARY_HOVER,
   GREEN_PRIMARY,
-  GREEN_PRIMARY_HOVER,
   GRAY_DARK,
   GRAY_LIGHT,
   GREEN_BG_LIGHT,
   GREEN_TEXT_DARK,
   RED_BG_LIGHT,
   RED_BORDER,
-  RED_TEXT_DARK
+  RED_TEXT_DARK,
+  HOVER_BRIGHTNESS
 } from '../styles/colors';
 
 /**
@@ -175,10 +174,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = VIOLET_PRIMARY_HOVER;
+            e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
           }}
           onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.background = MAIN_BLUE;
+            e.currentTarget.style.filter = 'brightness(1)';
           }}
         >
           {loading ? 'Processing...' : 'Download'}
@@ -200,10 +199,10 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
             transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
-            if (!loading) e.currentTarget.style.background = GREEN_PRIMARY_HOVER;
+            e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
           }}
           onMouseLeave={(e) => {
-            if (!loading) e.currentTarget.style.background = GREEN_PRIMARY;
+            e.currentTarget.style.filter = 'brightness(1)';
           }}
         >
           Upload
@@ -239,7 +238,7 @@ const YouTubeDownloader = ({ onDownloadComplete }) => {
           marginTop: '16px',
           padding: '12px',
           background: GREEN_BG_LIGHT,
-          border: `1px solid ${GREEN_PRIMARY_HOVER}`,
+          border: `1px solid ${GREEN_PRIMARY}`,
           borderRadius: '8px',
           color: GREEN_TEXT_DARK,
           fontSize: '14px'

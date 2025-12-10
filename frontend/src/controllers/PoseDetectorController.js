@@ -367,6 +367,7 @@ export const usePoseDetectorController = () => {
 
   /**
    * Calculate similarity score for each joint (0-100) with directional data
+   * Uses softer exponential decay to be more forgiving of body proportion differences
    */
   const calculateJointSimilarity = (userPose, refPose) => {
     if (!userPose || !refPose) return {};
@@ -377,8 +378,10 @@ export const usePoseDetectorController = () => {
         const dx = userPose[jointName].x - refPose[jointName].x;
         const dy = userPose[jointName].y - refPose[jointName].y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        // Convert to similarity score (0-100)
+
+        // Exponential decay: distance=0 → 100%, distance=0.5 → 61%, distance=1.0 → 37%
         const similarity = 100 * Math.exp(-distance);
+
         similarities[jointName] = {
           score: Math.round(similarity * 10) / 10,
           dx: dx,
@@ -400,19 +403,19 @@ export const usePoseDetectorController = () => {
     const getMagnitudeWord = (value) => {
       const abs = Math.abs(value);
       if (abs < 0.15) return null; // Too small to mention
-      if (abs < 0.35) return 'slightly';
-      if (abs < 0.6) return '';
+      if (abs < 0.6) return 'slightly';
+      if (abs < 1.0) return '';
       return 'a lot';
     };
 
-    // Horizontal direction (dx > 0 means user is too far right on screen, but due to mirror view, tell them to move right)
+    // Horizontal direction (dx > 0 means user is too far right in normalized space)
     const hMag = getMagnitudeWord(dx);
     if (hMag !== null) {
       const hDir = dx > 0 ? 'right' : 'left';
       directions.push(`${hMag} ${hDir}`.trim());
     }
 
-    // Vertical direction (no flip needed)
+    // Vertical direction (dy > 0 means user is too far down)
     const vMag = getMagnitudeWord(dy);
     if (vMag !== null) {
       const vDir = dy > 0 ? 'up' : 'down';
@@ -594,7 +597,7 @@ export const usePoseDetectorController = () => {
       // Set current classification for display
       setCurrentClassification(classification);
       setFloatingText({
-        text: `${classification.toUpperCase()}! ${stats.combo > 0 ? `Combo: ${stats.combo}` : ''}`,
+        text: classification.toUpperCase(),
         timestamp: Date.now()
       });
     }
@@ -1157,8 +1160,13 @@ export const usePoseDetectorController = () => {
     setShowGameSummary(false);
     setGameResults(null);
 
-    // Clear video selection → force user to select again
+    // Clear video selection → go back to video selection screen
     setReferenceVideo(null);
+
+    // Reset video if playing
+    if (videoPlayerControlRef.current) {
+      videoPlayerControlRef.current.reset();
+    }
 
     // Clear pose comparison data
     frameScoresRef.current = [];
@@ -1168,11 +1176,6 @@ export const usePoseDetectorController = () => {
 
     // Reset video playing state
     setVideoPlaying(false);
-
-    // Pause video if playing
-    if (videoPlayerControlRef.current) {
-      videoPlayerControlRef.current.pause();
-    }
 
     // Start fresh game session → shows video selection screen
     startGameSession();

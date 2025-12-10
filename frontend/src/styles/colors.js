@@ -10,14 +10,11 @@ export const MAIN_PURPLE = '#764ba2';            // Main gradient end
 // ==================== ACCENT COLORS ====================
 // Purple
 export const BLUE_PRIMARY = MAIN_BLUE;           // Primary purple (same as background)
-export const BLUE_PRIMARY_HOVER = '#8078D4';     // Purple hover state
 export const VIOLET_PRIMARY = '#6F66C8';         // Dark purple (Clear Video button)
-export const VIOLET_PRIMARY_HOVER = '#7c8ff0';   // Light purple hover (Download button)
 
 // Green
-export const GREEN_PRIMARY = '#48bb78';          // Primary green (great scores, success buttons)
-export const GREEN_PRIMARY_HOVER = '#68d391';    // Green hover state
-export const GREEN_GOOD = '#38a169';             // Good scores (darker green)
+export const GREEN_PRIMARY = '#43c4de';          // Primary green (great scores, success buttons)
+export const GREEN_GOOD = '#5fd471';             // Good scores (darker green)
 
 // Orange
 export const ORANGE_PRIMARY = '#ed8936';         // Mid scores, warning
@@ -49,3 +46,6 @@ export const RED_TEXT_DARK = '#c53030';          // Dark red text
 // ==================== OPACITY CONSTANTS ====================
 export const BACK_PANE_OPACITY = 0.15;           // Outer container backgrounds
 export const LAYERED_PANE_OPACITY = 0.05;        // Inner panels layered on top
+
+// ==================== HOVER CONSTANTS ====================
+export const HOVER_BRIGHTNESS = 1.1;             // Brightness filter for all button hovers

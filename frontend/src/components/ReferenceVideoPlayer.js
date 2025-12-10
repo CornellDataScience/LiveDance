@@ -4,13 +4,12 @@ import PoseEstimationService from '../services/PoseEstimationService';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
 import {
   MAIN_BLUE,
-  BLUE_PRIMARY_HOVER,
   VIOLET_PRIMARY,
-  VIOLET_PRIMARY_HOVER,
   PINK_PRIMARY,
   PINK_DARK,
   GRAY_DARK,
-  GRAY_MEDIUM
+  GRAY_MEDIUM,
+  HOVER_BRIGHTNESS
 } from '../styles/colors';
 
 /**
@@ -120,6 +119,15 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           // Return resolved promise instead of rejecting when video doesn't exist
           // This prevents errors when pausing before video selection
           console.log('[DEBUG] ReferenceVideoPlayer: Pause called but no video element');
+          return Promise.resolve();
+        },
+        reset: () => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.pause();
+            return Promise.resolve();
+          }
+          console.log('[DEBUG] ReferenceVideoPlayer: Reset called but no video element');
           return Promise.resolve();
         }
       };
@@ -474,7 +482,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       width: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: gameMode ? '#000' : 'transparent'
+      background: 'transparent',
+      height: gameMode ? '100%' : 'auto',
+      padding: gameMode ? '20px' : '0',
+      boxSizing: 'border-box'
     }}>
       {!gameMode && (
         <div style={{
@@ -499,10 +510,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 background: getHeaderButtonBackground(showDownloader)
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
+                e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = getHeaderButtonBackground(showDownloader);
+                e.currentTarget.style.filter = 'brightness(1)';
               }}
             >
               {showDownloader ? 'Hide Downloader' : 'Download Video'}
@@ -514,10 +525,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 background: VIOLET_PRIMARY
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
+                e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = VIOLET_PRIMARY;
+                e.currentTarget.style.filter = 'brightness(1)';
               }}
             >
               Refresh
@@ -538,7 +549,9 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: showDownloader ? '16px' : '0'
+          gap: showDownloader ? '16px' : '0',
+          flex: gameMode ? '1' : 'none',
+          height: gameMode ? '100%' : 'auto'
         }}>
           {/* YouTube Downloader */}
           {showDownloader && (
@@ -549,12 +562,16 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           <div style={{
             position: 'relative',
             width: '100%',
-            paddingBottom: showDownloader ? 'calc(75% - 195px)' : '75%',
+            paddingBottom: gameMode ? '0' : (showDownloader ? 'calc(75% - 195px)' : '75%'),
+            height: gameMode ? 'auto' : 'auto',
+            maxHeight: gameMode ? '100%' : 'none',
+            flex: gameMode ? '0 1 auto' : 'none',
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
             background: 'rgba(255, 255, 255, 0.15)',
-            backdropFilter: 'blur(10px)'
+            backdropFilter: 'blur(10px)',
+            boxSizing: 'border-box'
           }}>
             <div style={{
               position: 'absolute',
@@ -597,7 +614,9 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: showDownloader ? '16px' : '0'
+          gap: showDownloader ? '16px' : '0',
+          flex: gameMode ? '1' : 'none',
+          height: gameMode ? '100%' : 'auto'
         }}>
           {/* YouTube Downloader above the list */}
           {showDownloader && (
@@ -608,19 +627,24 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           <div style={{
             position: 'relative',
             width: '100%',
-            paddingBottom: showDownloader ? 'calc(75% - 195px)' : '75%',
+            paddingBottom: gameMode ? '0' : (showDownloader ? 'calc(75% - 195px)' : '75%'),
+            height: gameMode ? 'auto' : 'auto',
+            maxHeight: gameMode ? '100%' : 'none',
+            flex: gameMode ? '0 1 auto' : 'none',
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
             background: 'rgba(255, 255, 255, 0.15)',
-            backdropFilter: 'blur(10px)'
+            backdropFilter: 'blur(10px)',
+            boxSizing: 'border-box'
           }}>
             <div style={{
-              position: 'absolute',
+              position: gameMode ? 'relative' : 'absolute',
               top: 0,
               left: 0,
               right: 0,
               bottom: 0,
+              height: gameMode ? '100%' : 'auto',
               overflowY: 'auto',
               overflowX: 'hidden',
               padding: '16px'
@@ -674,7 +698,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           display: 'flex',
           flexDirection: 'column',
           height: gameMode ? '100%' : 'auto',
-          flex: gameMode ? '1' : 'none'
+          flex: gameMode ? '1' : 'none',
+          boxSizing: 'border-box'
         }}>
           {/* YouTube Downloader when video is selected */}
           {showDownloader && !gameMode && (
@@ -713,10 +738,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                   whiteSpace: 'nowrap'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = VIOLET_PRIMARY_HOVER;
+                  e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = MAIN_BLUE;
+                  e.currentTarget.style.filter = 'brightness(1)';
                 }}
               >
                 {showSkeleton ? 'Hide Skeleton' : 'Show Skeleton'}
@@ -730,7 +755,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
             overflow: 'hidden',
             boxShadow: gameMode ? 'none' : '0 4px 20px rgba(0, 0, 0, 0.2)',
             height: gameMode ? '100%' : 'auto',
-            flex: gameMode ? '1' : 'none'
+            flex: gameMode ? '1' : 'none',
+            boxSizing: 'border-box'
           }}>
             <video
               ref={videoRef}

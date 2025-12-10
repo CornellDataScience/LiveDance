@@ -7,15 +7,15 @@ import {
   MAIN_BLUE,
   MAIN_PURPLE,
   BLUE_PRIMARY,
-  BLUE_PRIMARY_HOVER,
   GREEN_PRIMARY,
-  GREEN_PRIMARY_HOVER,
   GREEN_GOOD,
   ORANGE_PRIMARY,
   RED_PRIMARY,
   PINK_PRIMARY,
   GOLD_PRIMARY,
-  GRAY_MEDIUM
+  GRAY_MEDIUM,
+  VIOLET_PRIMARY,
+  HOVER_BRIGHTNESS
 } from '../styles/colors';
 
 /**
@@ -123,10 +123,10 @@ const PoseDetectorView = ({
               transition: 'background 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.filter = 'brightness(1)';
             }}
           >
             <div style={{ 
@@ -240,10 +240,10 @@ const PoseDetectorView = ({
               transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = GREEN_PRIMARY_HOVER;
+              e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = GREEN_PRIMARY;
+              e.currentTarget.style.filter = 'brightness(1)';
             }}
           >
             Start Game Session
@@ -278,12 +278,12 @@ const PoseDetectorView = ({
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               e.currentTarget.style.transform = 'translateY(-2px)';
               e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = showData ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.filter = 'brightness(1)';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
@@ -308,12 +308,12 @@ const PoseDetectorView = ({
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               e.currentTarget.style.transform = 'translateY(-2px)';
               e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.filter = 'brightness(1)';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
@@ -338,12 +338,12 @@ const PoseDetectorView = ({
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               e.currentTarget.style.transform = 'translateY(-2px)';
               e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.15)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.filter = 'brightness(1)';
               e.currentTarget.style.transform = 'translateY(0)';
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
             }}
@@ -394,7 +394,7 @@ const PoseDetectorView = ({
           left: 0,
           width: '100vw',
           height: '100vh',
-          background: '#000',
+          background: `linear-gradient(135deg, ${MAIN_BLUE} 0%, ${MAIN_PURPLE} 100%)`,
           zIndex: 2000
         }}>
           {/* Exit and Reset Buttons */}
@@ -410,13 +410,20 @@ const PoseDetectorView = ({
               onClick={exitGameSession}
               style={{
                 padding: '12px 24px',
-                background: 'rgba(229, 62, 62, 0.9)',
+                background: RED_PRIMARY,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '14px'
+                fontSize: '14px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = 'brightness(1)';
               }}
             >
               Exit
@@ -425,13 +432,20 @@ const PoseDetectorView = ({
               onClick={resetGameSession}
               style={{
                 padding: '12px 24px',
-                background: 'rgba(237, 137, 54, 0.9)',
+                background: ORANGE_PRIMARY,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '14px'
+                fontSize: '14px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = 'brightness(1)';
               }}
             >
               Reset
@@ -455,8 +469,7 @@ const PoseDetectorView = ({
               <div style={{
                 fontSize: '120px',
                 fontWeight: '700',
-                color: 'white',
-                animation: 'pulse 1s ease-in-out'
+                color: 'white'
               }}>
                 {countdown}
               </div>
@@ -537,10 +550,9 @@ const PoseDetectorView = ({
                       color: currentClassification === 'great' ? GREEN_PRIMARY :
                              currentClassification === 'good' ? GREEN_GOOD :
                              currentClassification === 'mid' ? ORANGE_PRIMARY : RED_PRIMARY,
-                      textShadow: '0 4px 8px rgba(0, 0, 0, 0.8)',
-                      animation: 'fadeInOut 1s ease-in-out',
                       zIndex: 10,
-                      pointerEvents: 'none'
+                      pointerEvents: 'none',
+                      textAlign: 'center'
                     }}>
                       {floatingText.text}
                     </div>
@@ -550,13 +562,16 @@ const PoseDetectorView = ({
                   {gameSessionActive && gameStatsRef.current.combo > 0 && (
                     <div style={{
                       position: 'absolute',
-                      top: '20px',
-                      left: '20px',
-                      fontSize: '32px',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, calc(-50% + 40px))',
+                      fontSize: '24px',
                       fontWeight: '700',
-                      color: GOLD_PRIMARY,
-                      textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
-                      pointerEvents: 'none'
+                      color: currentClassification === 'great' ? GREEN_PRIMARY :
+                             currentClassification === 'good' ? GREEN_GOOD :
+                             currentClassification === 'mid' ? ORANGE_PRIMARY : RED_PRIMARY,
+                      pointerEvents: 'none',
+                      textAlign: 'center'
                     }}>
                       Combo: {gameStatsRef.current.combo}
                     </div>
@@ -640,10 +655,10 @@ const PoseDetectorView = ({
                 background: getHeaderButtonBackground(cameraEnabled)
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
+                e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = getHeaderButtonBackground(cameraEnabled);
+                e.currentTarget.style.filter = 'brightness(1)';
               }}
             >
               {cameraEnabled ? 'Camera: On' : 'Camera: Off'}
@@ -761,9 +776,9 @@ const PoseDetectorView = ({
               </h3>
               {overallScore !== null && (
                 <div style={{
-                  background: overallScore >= 80 ? `${GREEN_PRIMARY}4D` :
-                             overallScore >= 60 ? `${ORANGE_PRIMARY}4D` :
-                             `${RED_PRIMARY}4D`,
+                  background: overallScore >= 80 ? `${GREEN_PRIMARY}5D` :
+                             overallScore >= 60 ? `${ORANGE_PRIMARY}5D` :
+                             `${RED_PRIMARY}5D`,
                   padding: '8px 16px',
                   borderRadius: '8px',
                   color: 'white',
@@ -829,7 +844,8 @@ const PoseDetectorView = ({
                           width: `${item.score}%`,
                           height: '100%',
                           background: item.score >= 80 ? GREEN_PRIMARY :
-                                      item.score >= 60 ? ORANGE_PRIMARY :
+                                      item.score >= 60 ? GREEN_GOOD :
+                                      item.score >= 40 ? ORANGE_PRIMARY :
                                       RED_PRIMARY,
                           transition: 'width 0.3s ease'
                         }} />
@@ -877,7 +893,8 @@ const PoseDetectorView = ({
                           width: `${item.score}%`,
                           height: '100%',
                           background: item.score >= 80 ? GREEN_PRIMARY :
-                                      item.score >= 60 ? ORANGE_PRIMARY :
+                                      item.score >= 60 ? GREEN_GOOD :
+                                      item.score >= 40 ? ORANGE_PRIMARY :
                                       RED_PRIMARY,
                           transition: 'width 0.3s ease'
                         }} />
@@ -1275,7 +1292,6 @@ const PoseDetectorView = ({
                        gameResults.grade === 'A' ? GREEN_PRIMARY :
                        gameResults.grade === 'B' ? GREEN_GOOD :
                        gameResults.grade === 'C' ? ORANGE_PRIMARY : RED_PRIMARY,
-                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
                 marginBottom: '16px'
               }}>
                 {gameResults.grade}
@@ -1316,49 +1332,7 @@ const PoseDetectorView = ({
               } color={BLUE_PRIMARY} />
             </div>
 
-            {/* Areas to Improve */}
-            {topImprovements && topImprovements.length > 0 && (
-              <div style={{
-                marginBottom: '32px'
-              }}>
-                <h3 style={{
-                  color: 'white',
-                  fontSize: '20px',
-                  fontWeight: '600',
-                  marginBottom: '16px'
-                }}>
-                  Areas to Improve
-                </h3>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '12px'
-                }}>
-                  {topImprovements.slice(0, 6).map((item, idx) => (
-                    <div key={item.joint} style={{
-                      background: 'rgba(255, 255, 255, 0.15)',
-                      padding: '12px',
-                      borderRadius: '8px'
-                    }}>
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: 'white',
-                        marginBottom: '4px'
-                      }}>
-                        #{idx + 1} {item.name}
-                      </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.8)'
-                      }}>
-                        {item.recommendation}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Areas to Improve - REMOVED */}
 
             {/* Action Buttons */}
             <div style={{
@@ -1376,7 +1350,14 @@ const PoseDetectorView = ({
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
                 }}
               >
                 Export JSON
@@ -1387,11 +1368,18 @@ const PoseDetectorView = ({
                   padding: '16px 32px',
                   fontSize: '16px',
                   fontWeight: '600',
-                  background: GREEN_GOOD,
+                  background: GREEN_PRIMARY,
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
                 }}
               >
                 Play Again
@@ -1406,7 +1394,14 @@ const PoseDetectorView = ({
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter = `brightness(${HOVER_BRIGHTNESS})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = 'brightness(1)';
                 }}
               >
                 Exit
