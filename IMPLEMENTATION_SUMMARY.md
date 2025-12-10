@@ -5,12 +5,14 @@
 ### ✅ Core Architecture
 
 1. **Latest-Wins Frame Buffer**
+
    - Single-slot buffer that overwrites old frames
    - Prevents queue buildup and out-of-order issues
    - Thread-safe with mutex locks
    - Tracks dropped frames (feature, not bug!)
 
 2. **Decoupled Transport & Inference**
+
    - Frontend sends @ 60 FPS (video frame rate)
    - Backend processes @ ~24 FPS (inference speed)
    - No artificial throttling needed
@@ -25,12 +27,14 @@
 ### ✅ Performance Optimizations
 
 4. **Frame Downscaling**
+
    - Resize to 384px short side before inference
    - 2-3x speedup with minimal quality loss
    - Maintains aspect ratio
    - Uses fast INTER_LINEAR interpolation
 
 5. **EMA Smoothing**
+
    - Exponential Moving Average (α=0.7)
    - Applied to body landmarks, hands, 3D angles, 3D coords
    - Eliminates jitter and noise
@@ -45,6 +49,7 @@
 ### ✅ MediaPipe Configuration
 
 7. **LIVE_STREAM Mode**
+
    - Better temporal tracking than static mode
    - Improved occlusion handling
    - More stable landmark positions
@@ -61,16 +66,19 @@
 ## Files Modified
 
 ### Backend
+
 - ✅ `backend/app.py` - Complete rewrite with threading, buffer, smoothing
 - ✅ `backend/requirements.txt` - Added flask-socketio, python-socketio
 
 ### Frontend
+
 - ✅ `frontend/src/services/PoseEstimationService.js` - WebSocket client with interpolation
 - ✅ `frontend/src/controllers/PoseDetectorController.js` - Async result handling
 - ✅ `frontend/src/views/PoseDetectorView.js` - Updated performance metrics display
 - ✅ `frontend/package.json` - Added socket.io-client
 
 ### Documentation
+
 - ✅ `WEBSOCKET_LATEST_WINS_IMPLEMENTATION.md` - Full technical documentation
 - ✅ `QUICKSTART_WEBSOCKET.md` - Quick start guide
 - ✅ `IMPLEMENTATION_SUMMARY.md` - This file
@@ -80,6 +88,7 @@
 ## Technical Highlights
 
 ### Backend Architecture
+
 ```python
 ┌──────────────────────────────────────┐
 │  WebSocket Handler (Receiver Thread) │
@@ -103,6 +112,7 @@
 ```
 
 ### Frontend Architecture
+
 ```javascript
 ┌──────────────────────────────────────┐
 │  Detection Loop (60 FPS)             │
@@ -125,36 +135,42 @@
 ## Key Design Decisions
 
 ### Why Latest-Wins Buffer?
+
 - ✅ Eliminates out-of-order frame issues
 - ✅ No unbounded queue growth
 - ✅ Always processes newest data
 - ✅ Simple and robust
 
 ### Why LIVE_STREAM Mode?
+
 - ✅ Better tracking than static mode
 - ✅ Handles occlusions better
 - ✅ More stable over time
 - ✅ Designed for video input
 
 ### Why Monotonic Timestamps?
+
 - ✅ MediaPipe requires strictly increasing timestamps
 - ✅ Prevents packet timestamp mismatch errors
 - ✅ Compatible with graph architecture
 - ✅ Reliable and deterministic
 
 ### Why EMA Smoothing?
+
 - ✅ Eliminates high-frequency noise
 - ✅ Preserves motion dynamics
 - ✅ Low computational cost
 - ✅ Tunable responsiveness
 
 ### Why Frame Downscaling?
+
 - ✅ 2-3x speedup
 - ✅ Minimal accuracy loss
 - ✅ Better than reducing model complexity
 - ✅ Configurable target size
 
 ### Why Linear Interpolation?
+
 - ✅ Smooth 60 FPS rendering
 - ✅ Hides inference latency
 - ✅ Simple and fast
@@ -165,6 +181,7 @@
 ## Performance Comparison
 
 ### Before (HTTP)
+
 ```
 Transport:      Request/Response
 Send Rate:      Limited by round-trip
@@ -178,6 +195,7 @@ Issues:         Choppy rendering, limited FPS
 ```
 
 ### After (WebSocket)
+
 ```
 Transport:      Persistent connection
 Send Rate:      60 FPS
@@ -197,6 +215,7 @@ Issues:         None! 🎉
 When you run the system, verify:
 
 ### ✅ Backend Console
+
 - [x] "Client connected via WebSocket"
 - [x] Logs every 30 frames with timing breakdown
 - [x] Shows "Dropped: X" (this is GOOD)
@@ -205,6 +224,7 @@ When you run the system, verify:
 - [x] NO "too many open files" errors
 
 ### ✅ Frontend UI
+
 - [x] Performance overlay in top-right
 - [x] FPS shows ~24
 - [x] Total latency: 40-60ms
@@ -213,9 +233,10 @@ When you run the system, verify:
 - [x] Smooth skeleton rendering (no jitter)
 
 ### ✅ Visual Quality
-- [x] Pink dots on body joints
+
+- [x] PINK_PRIMARY dots on body joints
 - [x] Teal dots on hands
-- [x] Gold 3D angles in data panel
+- [x] GOLD_PRIMARY 3D angles in data panel
 - [x] Coordinates update smoothly
 - [x] No stuttering or lag
 
@@ -224,30 +245,38 @@ When you run the system, verify:
 ## What Problems This Solves
 
 ### ❌ Before: Timestamp Mismatch
+
 ```
 ❌ WebSocket error: Packet timestamp mismatch on stream "image"
    Current minimum: 7733257 but received 7699923
 ```
+
 **✅ Fixed:** Monotonic timestamp generator ensures strictly increasing timestamps
 
 ### ❌ Before: Too Many Open Files
+
 ```
 ❌ WebSocket error: [Errno 24] Too many open files
 ```
+
 **✅ Fixed:** Reusable MediaPipe instances in inference thread (no recreation)
 
 ### ❌ Before: Buffer Overflow
+
 ```
 ⚠️ Buffer overflow, dropped frame 4
 ⚠️ Buffer overflow, dropped frame 5
 ... (endless spam)
 ```
+
 **✅ Fixed:** Latest-wins buffer with size 1 (intentional controlled dropping)
 
 ### ❌ Before: Choppy Rendering
+
 ```
 FPS: 15-20 (inconsistent, choppy motion)
 ```
+
 **✅ Fixed:** 60 FPS rendering with linear interpolation
 
 ---
@@ -255,6 +284,7 @@ FPS: 15-20 (inconsistent, choppy motion)
 ## Future Enhancements (Optional)
 
 ### Could Add:
+
 1. **Adaptive frame rate** - Measure backend FPS, throttle frontend to match
 2. **WebP encoding** - Better compression than JPEG
 3. **Binary transfer** - Avoid base64 overhead
@@ -264,6 +294,7 @@ FPS: 15-20 (inconsistent, choppy motion)
 7. **Recording mode** - Save video + pose data
 
 ### But Not Needed Now:
+
 - Current implementation is **stable, fast, and production-ready**
 - Optimizations have diminishing returns
 - Focus on using the system for your dance application!
@@ -273,6 +304,7 @@ FPS: 15-20 (inconsistent, choppy motion)
 ## Conclusion
 
 This implementation successfully creates a **professional-grade, real-time pose estimation system** using:
+
 - ✅ WebSocket for low-latency communication
 - ✅ Latest-wins buffer for stability
 - ✅ Monotonic timestamps for MediaPipe compatibility
@@ -290,7 +322,6 @@ This implementation successfully creates a **professional-grade, real-time pose 
 **Smoothing:** Exponential Moving Average (classical signal processing)  
 **Interpolation:** Linear interpolation (computer graphics standard)  
 **Pose Estimation:** MediaPipe Pose + Hands (Google)  
-**3D Estimation:** MediaPipe World Landmarks  
+**3D Estimation:** MediaPipe World Landmarks
 
 **Result:** Production-ready system! 🚀💃🕺
-

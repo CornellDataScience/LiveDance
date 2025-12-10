@@ -84,7 +84,7 @@ const NeuroShaderCanvas = ({ audioBeat }) => {
                       clamp(length(q),0.0,1.0));
 
           color = mix(color,
-                      vec3(1.0, 0.7, 0.8), // Warm pink highlights
+                      vec3(1.0, 0.7, 0.8), // Warm pink_primary highlights
                       clamp(length(r.x),0.0,1.0));
           
           // Add a pulse effect on the beat

@@ -3,6 +3,7 @@
 ## 🎯 Issues Fixed
 
 ### 1. **Incorrect Total Latency** ❌ → ✅
+
 **Problem:** Total latency showed 8ms but backend was 27ms
 
 **Root Cause:**
@@ -39,12 +40,12 @@ constructor() {
 sendFrame() {
   const sendTime = now();
   const currentSequence = this.sequenceNumber++;
-  
+
   this.frameSendTimes.set(currentSequence, {
     sendTime: sendTime,
     captureTime: captureTime
   });
-  
+
   send frame with sequence...
 }
 
@@ -62,6 +63,7 @@ handleResult(data) {
 ### Frontend Implementation
 
 **Service (`PoseEstimationService.js`):**
+
 ```javascript
 constructor() {
   this.use3D = true; // Default to 3D
@@ -84,6 +86,7 @@ sendFrame(videoElement) {
 ```
 
 **Controller (`PoseDetectorController.js`):**
+
 ```javascript
 const toggle2D3D = () => {
   const newMode = poseService.current.toggle2D3D();
@@ -94,11 +97,12 @@ const toggle2D3D = () => {
 // Export to view
 return {
   //... other exports
-  toggle2D3D
+  toggle2D3D,
 };
 ```
 
 **View (`PoseDetectorView.js`):**
+
 ```jsx
 // Add toggle button
 <button
@@ -125,6 +129,7 @@ return {
 ### Backend Implementation
 
 **Buffer (`LatestFrameBuffer`):**
+
 ```python
 def put(self, frame_bytes, timestamp, sequence, use3D=True):
     """Store new frame with mode flag"""
@@ -137,6 +142,7 @@ def put(self, frame_bytes, timestamp, sequence, use3D=True):
 ```
 
 **Inference Loop:**
+
 ```python
 # Get mode from frame data
 use3D = frame_data.get('use3D', True)
@@ -168,6 +174,7 @@ socketio.emit('pose_result', {
 ## 📊 Expected Results
 
 ### Before Fix:
+
 ```
 Performance Monitor:
 ├─ FPS: 74
@@ -183,6 +190,7 @@ Performance Monitor:
 ```
 
 ### After Fix:
+
 ```
 Performance Monitor:
 ├─ Mode: 3D ✅ NEW
@@ -203,6 +211,7 @@ Performance Monitor:
 ## 🔄 Using the 2D/3D Toggle
 
 ### To Switch Modes:
+
 1. Click the **"🔄 Toggle 2D/3D"** button (orange button)
 2. Status will show "Switched to 2D mode" or "Switched to 3D mode"
 3. Mode will update in performance monitor
@@ -210,13 +219,15 @@ Performance Monitor:
 ### What Changes:
 
 **3D Mode (Default):**
+
 - ✅ Calculates 3D joint angles (elbow, knee, hip, shoulder)
 - ✅ Extracts 3D coordinates (x, y, z)
-- ✅ Shows in "3D Joint Angles" section (gold)
-- ✅ Shows in "3D Joint Coordinates" section (pink)
+- ✅ Shows in "3D Joint Angles" section (gold_primary)
+- ✅ Shows in "3D Joint Coordinates" section (pink_primary)
 - ✅ Slightly slower (~1ms for 3D calculation)
 
 **2D Mode:**
+
 - ✅ Only 2D body landmarks (x, y on screen)
 - ✅ Hand landmarks (x, y, z depth)
 - ❌ No 3D joint angles
@@ -224,7 +235,9 @@ Performance Monitor:
 - ✅ Slightly faster (~1ms saved)
 
 ### Comparison:
+
 You can toggle between modes to:
+
 - See if 3D angles provide better insights
 - Compare 2D vs 3D tracking accuracy
 - Measure performance difference
@@ -235,12 +248,14 @@ You can toggle between modes to:
 ## 🎯 Use Cases
 
 ### When to Use 3D Mode:
+
 - Need joint angles (e.g., knee bend angle)
 - Want depth information
 - Analyzing biomechanics
 - Scoring dance moves based on angles
 
 ### When to Use 2D Mode:
+
 - Only need screen position
 - Want maximum speed
 - Testing pure 2D tracking
@@ -251,12 +266,15 @@ You can toggle between modes to:
 ## 📁 Files Modified
 
 ### Frontend:
+
 1. **`frontend/src/services/PoseEstimationService.js`**
+
    - Fixed latency tracking with Map
    - Added `toggle2D3D()` and `getMode()` methods
    - Send `use3D` flag to backend
 
 2. **`frontend/src/controllers/PoseDetectorController.js`**
+
    - Added `toggle2D3D()` function
    - Pass `mode` to performance metrics
    - Export `toggle2D3D` to view
@@ -267,6 +285,7 @@ You can toggle between modes to:
    - Accept `toggle2D3D` prop
 
 ### Backend:
+
 1. **`backend/app.py`**
    - Updated `LatestFrameBuffer.put()` to accept `use3D`
    - Modified inference loop to conditionally calculate 3D
@@ -278,6 +297,7 @@ You can toggle between modes to:
 ## 🧪 Testing
 
 ### Test Latency Fix:
+
 1. Start backend and frontend
 2. Check performance monitor
 3. Verify:
@@ -286,6 +306,7 @@ You can toggle between modes to:
    - ✅ Total = Image Capture + Network + Backend (approximately)
 
 ### Test 2D/3D Toggle:
+
 1. Start in 3D mode (default)
 2. Verify 3D angles appear in data panel
 3. Click "Toggle 2D/3D"
@@ -303,11 +324,13 @@ You can toggle between modes to:
 ## 🎉 Benefits
 
 ### Latency Fix:
+
 - ✅ **Accurate metrics** - Can now properly optimize
 - ✅ **Trust the numbers** - Total latency makes sense
 - ✅ **Debug friendly** - Can identify bottlenecks
 
 ### 2D/3D Toggle:
+
 - ✅ **Flexibility** - Choose what you need
 - ✅ **Comparison** - Test accuracy differences
 - ✅ **Performance** - Optimize when needed
@@ -318,6 +341,7 @@ You can toggle between modes to:
 ## 📈 Performance Impact
 
 **3D Mode:**
+
 ```
 Total: ~30ms
 ├─ 2D Detection: ~15ms
@@ -326,6 +350,7 @@ Total: ~30ms
 ```
 
 **2D Mode:**
+
 ```
 Total: ~29ms
 ├─ 2D Detection: ~15ms
@@ -340,15 +365,16 @@ Total: ~29ms
 ## 🎯 Summary
 
 **Latency Fix:**
+
 - Tracks send time per sequence using Map
 - Matches results to correct send time
 - Gives accurate total latency calculation
 
 **2D/3D Toggle:**
+
 - Frontend button to switch modes
 - Backend conditionally calculates 3D
 - Real-time mode switching
 - Visual comparison capability
 
 **Result:** Accurate metrics + flexible detection modes! 🎉
-

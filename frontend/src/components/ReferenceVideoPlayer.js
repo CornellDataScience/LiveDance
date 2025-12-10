@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import YouTubeDownloader from './YouTubeDownloader';
 import PoseEstimationService from '../services/PoseEstimationService';
 import { headerButtonStyle, getHeaderButtonBackground } from '../styles/buttonStyles';
+import {
+  MAIN_BLUE,
+  BLUE_PRIMARY_HOVER,
+  VIOLET_PRIMARY,
+  VIOLET_PRIMARY_HOVER,
+  PINK_PRIMARY,
+  PINK_DARK,
+  GRAY_DARK,
+  GRAY_MEDIUM
+} from '../styles/colors';
 
 /**
  * ReferenceVideoPlayer - Display downloaded YouTube videos for reference
@@ -24,6 +34,19 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   const fpsCounterRef = useRef({ count: 0, lastTime: Date.now() });
   const lastSendTimeRef = useRef(0);
   const prevGameModeRef = useRef(gameMode);
+  const showSkeletonRef = useRef(showSkeleton);
+
+  // Keep showSkeletonRef in sync with showSkeleton state
+  // Also clear canvas immediately when hiding skeleton
+  useEffect(() => {
+    showSkeletonRef.current = showSkeleton;
+    
+    // Clear canvas when hiding skeleton
+    if (!showSkeleton && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
+  }, [showSkeleton]);
 
   /**
    * Fetch available videos from backend
@@ -152,6 +175,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
   const handleVideoSelect = (video) => {
     console.log('[DEBUG] ReferenceVideoPlayer: Video selected:', video);
     setSelectedVideo(video);
+    setShowDownloader(false);  // Auto-hide downloader when video is selected
     if (onVideoSelect) {
       onVideoSelect(video);
     }
@@ -255,7 +279,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
     // Clear canvas
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-    if (!showSkeleton || !poses.body || poses.body.length === 0) return;
+    if (!showSkeletonRef.current || !poses.body || poses.body.length === 0) return;
 
     // Draw body keypoints
     poses.body.forEach(keypoint => {
@@ -264,8 +288,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
           keypoint.x, keypoint.y, 0,
           keypoint.x, keypoint.y, 10
         );
-        gradient.addColorStop(0, '#ff6b9d');
-        gradient.addColorStop(1, '#c44569');
+        gradient.addColorStop(0, PINK_PRIMARY);
+        gradient.addColorStop(1, PINK_DARK);
 
         ctx.beginPath();
         ctx.arc(keypoint.x, keypoint.y, 6, 0, 2 * Math.PI);
@@ -335,8 +359,8 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
     //       landmark.x, landmark.y, 0,
     //       landmark.x, landmark.y, 8
     //     );
-    //     gradient.addColorStop(0, '#40E0D0');
-    //     gradient.addColorStop(1, '#1E90FF');
+    //     gradient.addColorStop(0, TEAL);
+    //     gradient.addColorStop(1, BLUE_DODGER);
 
     //     ctx.beginPath();
     //     ctx.arc(landmark.x, landmark.y, 5, 0, 2 * Math.PI);
@@ -442,7 +466,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
         }
       };
     }
-  }, [selectedVideo, showSkeleton]);
+  }, [selectedVideo]);  // Removed showSkeleton - using showSkeletonRef instead
 
   return (
     <div style={{
@@ -475,7 +499,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 background: getHeaderButtonBackground(showDownloader)
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#8078D4';
+                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = getHeaderButtonBackground(showDownloader);
@@ -487,13 +511,13 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
               onClick={fetchVideos}
               style={{
                 ...headerButtonStyle,
-                background: '#6F66C8'
+                background: VIOLET_PRIMARY
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#8078D4';
+                e.currentTarget.style.background = BLUE_PRIMARY_HOVER;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#6F66C8';
+                e.currentTarget.style.background = VIOLET_PRIMARY;
               }}
             >
               Refresh
@@ -507,7 +531,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
       )}
 
       {error && (
-        <p style={{ color: '#ff6b9d', fontSize: '14px' }}>{error}</p>
+        <p style={{ color: PINK_PRIMARY, fontSize: '14px' }}>{error}</p>
       )}
 
       {!loading && !error && videos.length === 0 && (
@@ -626,7 +650,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                   <div style={{
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: '#2d3748',
+                    color: GRAY_DARK,
                     marginBottom: '4px',
                     wordBreak: 'break-word'
                   }}>
@@ -634,7 +658,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                   </div>
                   <div style={{
                     fontSize: '12px',
-                    color: '#718096'
+                    color: GRAY_MEDIUM
                   }}>
                     {formatFileSize(video.size)}
                   </div>
@@ -679,7 +703,7 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 style={{
                   padding: '6px 12px',
                   fontSize: '12px',
-                  background: '#667eea',
+                  background: MAIN_BLUE,
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -689,10 +713,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                   whiteSpace: 'nowrap'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#7c8ff0';
+                  e.currentTarget.style.background = VIOLET_PRIMARY_HOVER;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#667eea';
+                  e.currentTarget.style.background = MAIN_BLUE;
                 }}
               >
                 {showSkeleton ? 'Hide Skeleton' : 'Show Skeleton'}
@@ -760,10 +784,10 @@ const ReferenceVideoPlayer = ({ onVideoSelect, videoPlayerControlRef, setVideoPl
                 transition: 'background 0.2s'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.35)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.20)';
               }}
             >
               Clear Video

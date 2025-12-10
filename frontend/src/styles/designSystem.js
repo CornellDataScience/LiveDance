@@ -22,9 +22,9 @@ export const colors = {
   
   // Accents
   accent: {
-    pink: '#ff6b9d',
+    pink_primary: '#ff6b9d',
     teal: '#40E0D0',
-    gold: '#ffd700',
+    gold_primary: '#ffd700',
     purple: '#c77dff',
     lightBlue: '#a0d8f1',
   },
