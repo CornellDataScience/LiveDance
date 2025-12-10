@@ -411,7 +411,7 @@ export const usePoseDetectorController = () => {
     // Horizontal direction (dx > 0 means user is too far right in normalized space)
     const hMag = getMagnitudeWord(dx);
     if (hMag !== null) {
-      const hDir = dx > 0 ? 'right' : 'left';
+      const hDir = dx > 0 ? 'left' : 'right'; // Swapped as requested
       directions.push(`${hMag} ${hDir}`.trim());
     }
 
