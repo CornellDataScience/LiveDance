@@ -1562,11 +1562,12 @@ export const usePoseDetectorController = () => {
    * Compare user pose with reference pose every frame
    * Uses sliding window for timing tolerance
    * Aggregate and calculate improvements every second
+   * Works even when video is paused (compares against frozen pose)
    */
   useEffect(() => {
-    if (!videoPlaying || !referencePose || !bodyLandmarks || bodyLandmarks.length === 0) {
-      // Clear improvements when video stops
-      if (!videoPlaying && topImprovements.length > 0) {
+    // Clear improvements if no reference video or no reference pose yet
+    if (!referenceVideo || !referencePose || referencePoseBufferRef.current.length === 0) {
+      if (topImprovements.length > 0) {
         setTopImprovements([]);
         setOverallScore(null);
         frameScoresRef.current = [];
@@ -1574,9 +1575,28 @@ export const usePoseDetectorController = () => {
       return;
     }
 
-    // Get current video time from most recent reference pose in buffer
-    if (referencePoseBufferRef.current.length === 0) return;
+    // Check if reference pose has valid landmarks (person detected in video)
+    const hasValidReferencePose = referencePose &&
+                                   Array.isArray(referencePose) &&
+                                   referencePose.length > 0 &&
+                                   referencePose.some(lm => lm.visible);
 
+    // Clear improvements if no valid pose detected in reference video
+    if (!hasValidReferencePose) {
+      if (topImprovements.length > 0) {
+        setTopImprovements([]);
+        setOverallScore(null);
+        frameScoresRef.current = [];
+      }
+      return;
+    }
+
+    // Only require reference pose and body landmarks - video can be paused
+    if (!bodyLandmarks || bodyLandmarks.length === 0) {
+      return;
+    }
+
+    // Get current video time from most recent reference pose in buffer
     const currentVideoTime = referencePoseBufferRef.current[
       referencePoseBufferRef.current.length - 1
     ].timestamp;
@@ -1589,7 +1609,7 @@ export const usePoseDetectorController = () => {
 
     // Aggregate scores every second
     aggregateScores();
-  }, [bodyLandmarks, referencePose, videoPlaying]);
+  }, [bodyLandmarks, referencePose, videoPlaying, referenceVideo]);
 
   // Return all state and functions needed by the View
   return {
