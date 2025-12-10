@@ -165,7 +165,7 @@ export const usePoseDetectorController = () => {
   // Importance level thresholds for feedback
   const IMPORTANCE_LEVELS = {
     CRITICAL: 2.0,   // >= 2.0 (wrists - hands are most expressive)
-    HIGH: 1.6,       // >= 1.8 (elbows, knees, ankles - arms and legs)
+    HIGH: 1.6,       // >= 1.6 (elbows, knees, ankles - arms and legs)
     MEDIUM: 1.0,     // >= 1.0 (shoulders, hips)
     LOW: 0.0         // < 1.0 (face features)
   };
@@ -494,10 +494,10 @@ export const usePoseDetectorController = () => {
       return 'a lot';
     };
 
-    // Horizontal direction (dx > 0 means user is too far right on screen, but due to mirror view, tell them to move right)
+    // Horizontal direction (dx > 0 means user is too far right, so tell them to move left)
     const hMag = getMagnitudeWord(dx);
     if (hMag !== null) {
-      const hDir = dx > 0 ? 'right' : 'left';
+      const hDir = dx > 0 ? 'left' : 'right';  // Fixed: inverted direction
       directions.push(`${hMag} ${hDir}`.trim());
     }
 
@@ -690,6 +690,7 @@ export const usePoseDetectorController = () => {
 
     if (staticPenalty > 0) {
       overall = Math.max(0, overall - staticPenalty);  // Deduct penalty, min 0
+      overall = Math.round(overall * 10) / 10;  // Round to 1 decimal for consistency
     }
 
     setTopImprovements(improvements);
@@ -772,9 +773,19 @@ export const usePoseDetectorController = () => {
         const frameScore = comparePoses(userLandmarks, refEntry.landmarks);
 
         if (frameScore && Object.keys(frameScore).length > 0) {
-          // Calculate average score for this comparison
-          const scores = Object.values(frameScore).map(joint => joint.score);
-          const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+          // Calculate WEIGHTED average score for this comparison
+          let weightedSum = 0;
+          let totalWeight = 0;
+
+          Object.entries(frameScore).forEach(([joint, data]) => {
+            if (!joint.startsWith('_')) {  // Skip metadata fields
+              const weight = JOINT_WEIGHTS[joint] || 1.0;
+              weightedSum += data.score * weight;
+              totalWeight += weight;
+            }
+          });
+
+          const avgScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
           // Apply timing penalty (less penalty for smaller time differences)
           const timingPenalty = (timeDiff / timeWindowSec) * MAX_TIMING_PENALTY;
