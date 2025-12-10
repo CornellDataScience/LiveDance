@@ -542,15 +542,24 @@ export const usePoseDetectorController = () => {
     const sortedJoints = Object.entries(avgScores).sort((a, b) => a[1] - b[1]);
 
     // Get top 10 areas needing improvement with directional recommendations
-    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => ({
-      joint: jointName,
-      name: BODY_PART_NAMES[jointName] || jointName,
-      score: score,
-      improvementNeeded: Math.round((100 - score) * 10) / 10,
-      recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName),
-      weight: JOINT_WEIGHTS[jointName] || 1.0,
-      importance: getImportanceLevel(jointName)
-    }));
+    const improvements = sortedJoints.slice(0, 10).map(([jointName, score]) => {
+      let displayName = BODY_PART_NAMES[jointName] || jointName;
+      if (displayName.includes('Left')) {
+        displayName = displayName.replace('Left', 'Right');
+      } else if (displayName.includes('Right')) {
+        displayName = displayName.replace('Right', 'Left');
+      }
+      
+      return {
+        joint: jointName,
+        name: displayName,
+        score: score,
+        improvementNeeded: Math.round((100 - score) * 10) / 10,
+        recommendation: getDirectionalRecommendation(avgDx[jointName], avgDy[jointName], jointName),
+        weight: JOINT_WEIGHTS[jointName] || 1.0,
+        importance: getImportanceLevel(jointName)
+      }
+    });
 
     // Calculate overall score using weighted mean
     let weightedSum = 0;
